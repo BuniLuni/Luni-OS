@@ -12,7 +12,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:9999;b
 html,body{overscroll-behavior:none}body{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 #desk{position:absolute;inset:0 0 calc(40px + env(safe-area-inset-bottom,0px));padding:12px;display:grid;grid-template-columns:repeat(auto-fill,84px);grid-auto-rows:92px;gap:6px;align-content:start}
 .ic{background:none;border:0;color:var(--hi);font:inherit;text-align:center;cursor:pointer;padding:4px}
-.ic i{display:block;font-style:normal;font-size:34px}AC
+.ic i{display:block;font-style:normal;font-size:34px}
 .ic:hover,.ic:focus-visible{background:rgba(255,79,163,.3);outline:1px dotted var(--mint)}
 .w{position:absolute;display:flex;flex-direction:column;background:var(--win);border:2px solid;border-color:var(--hi) var(--ink) var(--ink) var(--hi);box-shadow:5px 5px 0 rgba(0,0,0,.4);resize:both;overflow:hidden;min-width:240px;min-height:160px;max-width:100vw}
 .w.hide{display:none}.w.drag iframe{pointer-events:none}
@@ -503,11 +503,13 @@ async function admin(b){
    let controls='';
    if(manageable&&can('manage_roles')){
     const available=Object.values(R).filter(r=>r.name!=='owner'&&r.name!=='banned'&&r.pos>mypos()).sort((a,b)=>a.pos-b.pos);
-    const boxes=available.map(r=>[r.name,h('input',{type:'checkbox',checked:current.includes(r.name),disabled:r.name==='user'})]);
+    const boxes=available.map(r=>[r.name,h('input',{type:'checkbox',checked:r.name==='user'?!current.includes('banned'):current.includes(r.name),disabled:r.name==='user'})]);
+    const userBox=boxes.find(([n])=>n==='user')?.[1];
     const banned=h('input',{type:'checkbox',checked:current.includes('banned')});
+    // Banned is exclusive. Unchecking it automatically restores the base user role.
+    banned.onchange=()=>{if(userBox)userBox.checked=!banned.checked};
     const save=async()=>{
-     const selected=banned.checked?['banned']:boxes.filter(([,c])=>c.checked).map(([n])=>n);
-     if(!selected.length||(!banned.checked&&!selected.includes('user')))return toast('Keep the user role assigned');
+     const selected=banned.checked?['banned']:Array.from(new Set(['user',...boxes.filter(([n,c])=>n!=='user'&&c.checked).map(([n])=>n)]));
      const{error}=await sb.rpc('set_user_roles',{target_user_id:p.id,role_names:selected});
      if(error)return toast(error.message);
      assigned[p.id]=selected;
