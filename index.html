@@ -38,7 +38,8 @@ textarea{width:100%;font-family:monospace;font-size:14px}
 body.noscan::after{display:none}
 #credit{color:var(--ink);font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto;max-width:36vw}
 .body a{color:#5b1fb5}
-@media(max-width:600px){#credit{max-width:28vw;font-size:15px}}
+#ver{color:var(--ink);font-size:16px;white-space:nowrap;flex:0 0 auto}#ver .vs{display:none}
+@media(max-width:600px){#credit{max-width:28vw;font-size:15px}#ver{font-size:13px}#ver .vf{display:none}#ver .vs{display:inline}}
 #ctx{position:fixed;display:none;z-index:9500;min-width:170px;background:var(--win);border:2px solid;border-color:var(--hi) var(--ink) var(--ink) var(--hi);box-shadow:4px 4px 0 rgba(0,0,0,.4)}
 #ctx.on{display:block}#ctx button{display:block;width:100%;text-align:left;border:0;padding:4px 10px}#ctx button:hover{background:var(--pink);color:#fff}#ctx hr{margin:2px 0;border:0;border-top:1px solid var(--lo)}
 @media(max-width:600px){
@@ -53,12 +54,13 @@ body.noscan::after{display:none}
 @media(prefers-reduced-motion:no-preference){.start{animation:p 1.6s steps(2) infinite}@keyframes p{50%{background:var(--mint)}}}
 </style></head><body>
 <div id="desk"></div><div id="ann"></div><div id="menu"></div><div id="toast"></div><div id="ctx"></div>
-<div id="tb"><button id="start" class="start">Luni's Thing</button><div id="tasks"></div><a id="credit" href="https://radiusos.ignorelist.com/" target="_blank" rel="noopener noreferrer">Radius did it first and better (Radius OS)</a><span id="tray"></span></div>
+<div id="tb"><button id="start" class="start">Luni's Thing</button><div id="tasks"></div><a id="credit" href="https://radiusos.ignorelist.com/" target="_blank" rel="noopener noreferrer">Radius did it first and better (Radius OS)</a><span id="ver"></span><span id="tray"></span></div>
 <script>
 /* ====== CONFIG: paste your Supabase values (see schema.sql) ====== */
 const CFG={url:'https://cyjyuvrarekwlefxcqui.supabase.co',key:'sb_publishable_E2_jmyi7lsaceSdaVGeQAg_FvsDUTpb'};
 /* ================================================================= */
 const $=s=>document.querySelector(s);
+const VER={client:'5.2.1',server:'12.4.4'};
 const h=(t,p,...k)=>{const e=document.createElement(t);for(const x in p||{}){if(x==='on')for(const y in p.on)e.addEventListener(y,p.on[y]);else if(x in e)e[x]=p[x];else e.setAttribute(x,p[x])}k.flat().forEach(c=>e.append(c));return e};
 const store={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
 const toast=m=>{const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.display='none',2500)};
@@ -369,5 +371,6 @@ async function loadMe(){me=null;if(sb){const{data:{session}}=await sb.auth.getSe
 $('#start').onclick=()=>$('#menu').classList.toggle('on');
 $('#desk').onclick=()=>$('#menu').classList.remove('on');
 sb?.auth.onAuthStateChange(()=>setTimeout(loadMe,0));
+$('#ver').append(Object.assign(document.createElement('span'),{className:'vf',textContent:`Client ${VER.client} | Server ${VER.server}`}),Object.assign(document.createElement('span'),{className:'vs',textContent:`C${VER.client} S${VER.server}`}));$('#ver').title=`Client version ${VER.client}, server version ${VER.server}`;
 applySettings();loadMe();loadAnn();setInterval(clock,20000);
 </script></body></html>
