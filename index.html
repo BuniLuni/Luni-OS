@@ -258,7 +258,13 @@ if(me&&(can('delete_messages')||me.id===m.user_id))
 const ICE={iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]};
 let VC=null; /* the voice room you're currently in */
 const vSend=(to,type,data)=>VC?.ch.send({type:'broadcast',event:'sig',payload:{from:me.id,to,type,data}});
-function vClose(v,uid){const p=v.peers[uid];if(!p)return;try{p.pc.close()}catch{}p.audio.pause();p.audio.srcObject=null;try{p.src?.disconnect()}catch{}delete v.peers[uid];v.wants.delete(uid);v.watching.delete(uid)}
+function vClose(v,uid){
+ const p=v.peers[uid];
+ if(!p)return;
+ try{p.pc.close()}catch{}
+ p.audio.pause();p.audio.srcObject=null;try{p.src?.disconnect()}catch{}
+ delete v.peers[uid];v.wants.delete(uid);v.watching.delete(uid)
+}
 function vApply(){const v=VC;if(!v)return;const f=v.forced.has(me.id);v.track.enabled=!(v.self||f);
  if(v.ready)v.ch.track(v.pres());Object.entries(v.peers).forEach(([u,p])=>p.audio.muted=v.forced.has(u));v.ui?.()}
 /* screen share helpers: a viewer only accepts video from people whose role really has the screenshare permission */
@@ -284,7 +290,12 @@ function vPeer(uid){const v=VC;if(v.peers[uid])return v.peers[uid];
   if(e.track.kind==='video'){p.vs=new MediaStream([e.track]);e.track.onunmute=e.track.onmute=()=>v.ui?.();v.ui?.();return}
   const s=e.streams[0];p.audio.srcObject=s;p.audio.muted=v.forced.has(uid);p.audio.play().catch(()=>{});
   if(!p.an){p.src=v.ac.createMediaStreamSource(s);p.an=v.ac.createAnalyser();p.an.fftSize=512;p.src.connect(p.an)}};
- pc.onconnectionstatechange=()=>{if(pc.connectionState==='failed')toast('Could not connect to '+(v.prof[uid]?dn(v.prof[uid]):'someone')+' (their network may block voice)')};
+ pc.onconnectionstatechange=()=>{
+  if(pc.connectionState==='failed'&&v.peers[uid]===p){
+   vClose(v,uid);v.ui?.();
+   toast('Connection to '+(v.prof[uid]?dn(v.prof[uid]):'someone')+' failed; they may need to rejoin');
+  }
+ };
  return p}
 async function vFlush(p){while(p.pend.length)await p.pc.addIceCandidate(p.pend.shift()).catch(()=>{})}
 async function vSig(m){const v=VC;if(!v||m.to!==me.id||(v.ignore[m.from]||0)>Date.now())return;
@@ -303,7 +314,10 @@ async function vSync(){const v=VC;if(!v)return;
  v.pm={};v.ps={};v.pn={};ids.forEach(u=>{v.pm[u]=!!st[u][0]?.m;v.ps[u]=!!st[u][0]?.s;v.pn[u]=!!st[u][0]?.n});
  v.blocked.forEach(u=>{if(!v.ps[u])v.blocked.delete(u)}); /* a stopped sharer gets a clean slate */
  v.watching.forEach(u=>{if(!v.ps[u])v.watching.delete(u)}); /* stop "watching" anyone who stopped sharing */
- Object.keys(v.peers).forEach(u=>{if(!ids.includes(u))vClose(v,u)});
+ /* Do not close WebRTC peers just because Presence temporarily omits them.
+    Background tabs can be throttled and Presence can expire while the direct
+    peer connection is still carrying audio. Explicit leave/kick and actual
+    peer-connection failure are handled separately. */
  Object.keys(v.vels).forEach(u=>{if(!v.peers[u]){v.vels[u].srcObject=null;delete v.vels[u]}});
  const need=ids.filter(u=>!v.prof[u]);
  if(need.length)((await sb.from('profiles').select(PCOLS).in('id',need)).data||[]).forEach(p=>v.prof[p.id]=p);
@@ -342,6 +356,15 @@ function shareStop(msg){const v=VC;if(!v||!v.share)return;const s=v.share;v.shar
 function voiceLeave(msg){const v=VC;if(!v)return;VC=null;clearInterval(v.tick);Object.keys(v.peers).forEach(u=>vClose(v,u));
  v.share?.getTracks().forEach(t=>{t.onended=null;t.stop()});
  v.stream.getTracks().forEach(t=>t.stop());try{v.ac.close()}catch{}sb.removeChannel(v.ch);sb.removeChannel(v.act);if(v.cc)sb.removeChannel(v.cc);v.ui?.();tray();if(msg)toast(msg)}
+/* Returning to the tab can resume a browser-suspended AudioContext. Re-track
+   presence as well; the peer connections themselves are deliberately not stopped
+   just because document visibility changes. */
+document.addEventListener('visibilitychange',()=>{
+ const v=VC;if(!v||document.hidden)return;
+ if(v.ac.state==='suspended')v.ac.resume().catch(()=>{});
+ if(v.ready)v.ch.track(v.pres()).catch(()=>{});
+});
+
 async function voiceJoin(c,ui,textOnly){
  voiceLeave();
  if((await sb.rpc('vc_kicked',{cid:c.id})).data)return toast('You were kicked. Try again in a minute.');
