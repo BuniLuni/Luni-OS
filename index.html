@@ -111,7 +111,7 @@ const badge=r=>h('span',{style:`background:${rc(r)};color:${ink(rc(r))};font-siz
 function openProfile(p){win('p'+p.id,dn(p),'🪪',b=>{const a=av(p);
  b.append(h('div',{style:'text-align:center'},a?h('img',{src:a,width:96,height:96,style:'border:2px solid var(--ink);object-fit:cover'}):h('div',{className:'big'},'🪪'),h('h2',{style:'margin:0.375rem 0 0'},dn(p)),
   h('div',{},h('a',{href:'https://github.com/'+encodeURIComponent(p.login),target:'_blank',rel:'noopener noreferrer'},'@'+p.login),badge(p.role),...(p.id===me?.id?myRoleNames:[]).filter(n=>n!==p.role).map(badge))),
-  h('p',{style:'white-space:pre-wrap'},p.bio||'No description yet.'),h('div',{style:'opacity:.7'},p.created_at?'Joined '+new Date(p.created_at).toLocaleDateString():''),me&&p.id!==me.id?h('button',{on:{click:()=>openDM(p)}},'💌 Message'):'')},340,380)}
+  h('p',{style:'white-space:pre-wrap'},p.bio||'No description yet.'),h('div',{style:'opacity:.7'},p.created_at?'Joined '+new Date(p.created_at).toLocaleDateString():''),me&&p.id!==me.id?h('span',{},h('button',{on:{click:()=>openDM(p)}},'💌 Message'),' ',h('button',{on:{click:()=>openReport(p.login)}},'🚩 Report')):'')},340,380)}
 async function profileApp(b){
  if(!sb)return noBack(b);if(!me)return needLogin(b);
  const nm=h('input',{placeholder:'Display name (blank = '+me.login+')',maxLength:32,value:me.display_name||''}),bio=h('textarea',{rows:4,maxLength:200,placeholder:'Tell people about yourself (200 characters)'}),
@@ -799,11 +799,23 @@ async function admin(b){
   pane.replaceChildren(h('div',{className:'row'},all,' Everyone'),sel,h('small',{},'Ctrl/Shift-click to pick several users'),h('div',{className:'bar'},ti),bo,
    h('button',{on:{click:async()=>{const t=all.checked?null:[...sel.selectedOptions].map(o=>o.value);if(t&&!t.length)return toast('Pick at least one user');if(!ti.value.trim())return toast('Title required');
     const{data,error}=await sb.rpc('send_notification',{targets:t,p_title:ti.value.trim(),p_body:bo.value.trim()});if(error)return toast(error.message);toast('Sent to '+data+' user(s)');ti.value=bo.value=''}}},'Send notification'))},
+ Reports:async()=>{const flt=h('select',{},...['all','open','reviewing','accepted','denied'].map(x=>h('option',{},x))),l=h('div');
+  const draw=async()=>{let q=sb.from('reports').select('*').order('created_at',{ascending:false}).limit(60);if(flt.value!=='all')q=q.eq('status',flt.value);const d=(await q).data||[];
+   l.replaceChildren(...(d.length?d.map(r=>h('div',{className:'row'},RST[r.status][0]+' #'+r.id+' '+r.category+' - by @'+r.reporter_login+(r.target_login?' about @'+r.target_login:'')+' ',h('button',{on:{click:()=>open(r)}},'Open'))):[h('p',{},'No reports.')]))};
+  const open=r=>{const stTxt=()=>'Status: '+RST[r.status].join(' ')+(r.handled_by?' (by @'+r.handled_by+')':''),st=h('div',{},stTxt());
+   const set=async s=>{const{error}=await sb.from('reports').update({status:s,handled_by:me.login,updated_at:new Date().toISOString()}).eq('id',r.id);if(error)return toast(error.message);
+    r.status=s;r.handled_by=me.login;st.textContent=stTxt();log('report #'+r.id+' set to '+s);toast('Report '+RST[s][1]);repChanged()};
+   pane.replaceChildren(h('div',{className:'bar'},h('button',{on:{click:()=>T.Reports()}},'← Back')),h('b',{},'#'+r.id+' '+r.category+' from @'+r.reporter_login),r.target_login?h('div',{},'About: @'+r.target_login):'',
+    h('p',{style:'white-space:pre-wrap'},r.body),r.image_path?repImg(r.image_path):'',st,
+    h('div',{className:'bar'},h('button',{on:{click:()=>set('reviewing')}},'🔎 Review'),h('button',{on:{click:()=>set('accepted')}},'✅ Accept'),h('button',{on:{click:()=>set('denied')}},'❌ Deny'),h('button',{on:{click:()=>set('open')}},'Reopen')),
+    h('h3',{},'💬 Chat with reporter'),repThread(r,true))};
+  const on=()=>{if(!l.isConnected)return document.removeEventListener('rep-change',on);if(pane.contains(flt))draw()};document.addEventListener('rep-change',on);
+  flt.onchange=draw;pane.replaceChildren(h('div',{className:'bar'},flt,h('button',{on:{click:draw}},'Refresh')),l);draw()},
  Log:async()=>{const d=(await sb.from('audit').select('*').order('created_at',{ascending:false}).limit(60)).data||[];pane.replaceChildren(...d.map(r=>h('div',{className:'row'},`${new Date(r.created_at).toLocaleString()} - ${r.actor}: ${r.action}`)),d.length?'':'Nothing logged yet.')},
  Stats:async()=>{const day=new Date(Date.now()-864e5).toISOString();const v=await Promise.all([cnt('profiles'),cnt('profiles',q=>q.eq('role','banned')),cnt('messages'),cnt('messages',q=>q.gte('created_at',day)),cnt('apps')]);
   pane.replaceChildren(...['Users','Banned','Messages','Messages (24h)','Apps'].map((n,i)=>h('div',{className:'row'},`${n}: ${v[i]}`)))}
  };
- const NEED={Users:'ban',Chat:'delete_messages',Apps:'delete_apps',Announce:'announce',Settings:'site_settings',Log:'view_audit',Roles:'manage_roles',Emojis:'manage_emojis',Channels:'manage_channels',Stats:'admin_panel',Notify:'notify'};
+ const NEED={Users:'ban',Chat:'delete_messages',Apps:'delete_apps',Announce:'announce',Settings:'site_settings',Log:'view_audit',Roles:'manage_roles',Emojis:'manage_emojis',Channels:'manage_channels',Stats:'admin_panel',Notify:'notify',Reports:'admin_panel'};
  const keys=Object.keys(T).filter(k=>can(NEED[k])||(k==='Users'&&can('manage_roles')));
  keys.forEach(k=>bar.append(h('button',{on:{click:()=>{pane.textContent='Loading...';T[k]()}}},k)));
  b.append(bar,pane);T[keys[0]]();
@@ -930,6 +942,61 @@ function statusApp(b){if(!me)return needLogin(b);
   h('div',{style:'margin-top:0.375rem'},'Custom status'),t,
   h('div',{className:'bar',style:'margin-top:0.375rem'},h('button',{on:{click:save}},'Save'),h('button',{on:{click:()=>{t.value='';save()}}},'Clear')),
   h('small',{style:'opacity:.7'},'Online switches to Idle automatically after 5 minutes of no activity. Your status is saved on this device.'),colorUi())}
+/* ---- reports ---- */
+const RST={open:['🟡','Open'],reviewing:['🔎','Under review'],accepted:['✅','Accepted'],denied:['❌','Denied']};
+const RCAT=['Harassment','Spam','Inappropriate content','Cheating or exploit','Bug','Other'];
+const repChanged=()=>document.dispatchEvent(new Event('rep-change'));
+const openReport=l=>{openApp('report');wins.report?.prefill?.(l)};
+const repImg=path=>{const im=h('img',{style:'max-width:100%;max-height:13.75rem;display:block;cursor:zoom-in'});
+ sb.storage.from('report-images').createSignedUrl(path,3600).then(({data})=>{if(data?.signedUrl){im.src=data.signedUrl;im.onclick=()=>window.open(data.signedUrl,'_blank','noopener')}else im.replaceWith('[image unavailable]')});return im};
+const repUp=async f=>{const ext=IMGEXT[f.type];if(!ext||f.size>3e6){toast('PNG, JPG, GIF or WebP under 3 MB');return null}
+ const path=me.id+'/'+Date.now()+'-'+Math.random().toString(36).slice(2,8)+'.'+ext,{error}=await sb.storage.from('report-images').upload(path,f,{contentType:f.type});
+ if(error){toast(error.message);return null}return path};
+/* chat between a reporter and staff, shared by the Report app and the admin Reports tab */
+function repThread(r,staff){
+ const list=h('div',{style:'height:11rem;overflow:auto;background:#fff;border:2px solid;border-color:var(--lo) var(--hi) var(--hi) var(--lo);padding:0.1875rem'}),
+  inp=h('input',{maxLength:1000,placeholder:'Message',style:'flex:1'}),file=h('input',{type:'file',accept:'image/png,image/jpeg,image/gif,image/webp',style:'display:none'});
+ const line=m=>h('div',{className:'msg'},h('b',{style:m.is_staff?'color:var(--pink)':''},m.is_staff?'🛡 '+m.sender_login+' (staff)':m.sender_login),': ',m.body||'',m.image_path?repImg(m.image_path):'');
+ const load=async()=>{const d=(await sb.from('report_messages').select('*').eq('report_id',r.id).order('created_at')).data||[];list.replaceChildren(...(d.length?d.map(line):[h('small',{style:'opacity:.6'},'No messages yet.')]));list.scrollTop=1e9};
+ const send=async path=>{const body=inp.value.trim();if(!body&&!path)return;inp.value='';
+  const{error}=await sb.from('report_messages').insert({report_id:r.id,sender_id:me.id,sender_login:me.login,is_staff:staff,body,image_path:path||null});
+  if(error){inp.value=body;return toast(error.message)}load()};
+ inp.onkeydown=e=>{if(e.key==='Enter')send()};
+ file.onchange=async()=>{const f=file.files[0];file.value='';if(!f)return;toast('Uploading...');const p=await repUp(f);if(p)send(p)};
+ const el=h('div',{},list,h('div',{className:'bar',style:'margin:0.25rem 0 0'},h('button',{title:'Send an image',on:{click:()=>file.click()}},'🖼'),inp,h('button',{on:{click:()=>send()}},'Send')),file);
+ const on=()=>{if(!el.isConnected)return document.removeEventListener('rep-change',on);load()};
+ document.addEventListener('rep-change',on);load();return el}
+function reportApp(b,w){
+ if(!sb)return noBack(b);if(!me)return needLogin(b);
+ const pane=h('div');let mode='list',cur=null,stEl=null;
+ const list=async()=>{mode='list';pane.textContent='Loading...';
+  const d=(await sb.from('reports').select('*').eq('reporter_id',me.id).order('created_at',{ascending:false}).limit(50)).data||[];
+  if(mode!=='list')return;
+  pane.replaceChildren(h('div',{className:'bar'},h('button',{on:{click:()=>form()}},'🚩 New report'),h('button',{on:{click:list}},'Refresh')),
+   ...(d.length?d.map(r=>h('div',{className:'row'},RST[r.status][0]+' #'+r.id+' '+r.category+(r.target_login?' - @'+r.target_login:'')+' ',h('button',{on:{click:()=>view(r)}},'Open'))):[h('p',{},'You have no reports. Be kind: only report real problems.')]))};
+ const view=r=>{mode='view';cur=r.id;stEl=h('div',{},'Status: '+RST[r.status].join(' '));
+  pane.replaceChildren(h('div',{className:'bar'},h('button',{on:{click:list}},'← Back')),h('b',{},'#'+r.id+' '+r.category),stEl,r.target_login?h('div',{},'About: @'+r.target_login):'',
+   h('p',{style:'white-space:pre-wrap'},r.body),r.image_path?repImg(r.image_path):'',h('h3',{},'💬 Chat with staff'),repThread(r,false))};
+ const form=pre=>{mode='form';
+  const tg=h('input',{placeholder:'GitHub login or link (optional)',maxLength:60,value:pre||'',style:'width:100%'}),cat=h('select',{},...RCAT.map(c=>h('option',{},c))),
+   body=h('textarea',{rows:5,maxLength:1000,placeholder:'What happened?'}),file=h('input',{type:'file',accept:'image/png,image/jpeg,image/gif,image/webp'}),btn=h('button',{},'Submit report');
+  btn.onclick=async()=>{const t=body.value.trim();if(!t)return toast('Describe what happened');btn.disabled=true;let path=null;const f=file.files[0];
+   if(f){path=await repUp(f);if(!path){btn.disabled=false;return}}
+   const{error}=await sb.from('reports').insert({reporter_id:me.id,reporter_login:me.login,target_login:tg.value.trim().replace(/^@/,'').slice(0,60)||null,category:cat.value,body:t,image_path:path});
+   btn.disabled=false;if(error)return toast(/row-level|policy/.test(error.message)?'You can have at most 5 open reports. Wait for staff to handle them.':error.message);
+   toast('Report sent');repChanged();list()};
+  pane.replaceChildren(h('div',{className:'bar'},h('button',{on:{click:list}},'← Back')),h('div',{},'Category'),cat,h('div',{},'About (optional)'),tg,h('div',{},'Details'),body,
+   h('div',{},'Screenshot (optional, 3 MB)'),file,h('div',{style:'margin-top:0.375rem'},btn))};
+ const on=async()=>{if(!b.isConnected)return document.removeEventListener('rep-change',on);
+  if(mode==='list')list();else if(mode==='view'&&stEl){const{data}=await sb.from('reports').select('status').eq('id',cur).maybeSingle();if(data)stEl.textContent='Status: '+RST[data.status].join(' ')}};
+ document.addEventListener('rep-change',on);w.prefill=form;b.append(pane);list()}
+let RPC=null;
+function repStart(){if(RPC){sb.removeChannel(RPC);RPC=null}if(!sb||!me)return;
+ RPC=sb.channel('rep-'+me.id)
+  .on('postgres_changes',{event:'INSERT',schema:'public',table:'reports'},p=>{if(p.new.reporter_id!==me.id&&staff()){snd('note');toast('🚩 New report #'+p.new.id)}repChanged()})
+  .on('postgres_changes',{event:'UPDATE',schema:'public',table:'reports'},p=>{if(p.new.reporter_id===me.id){snd('note');toast('🚩 Report #'+p.new.id+': '+(RST[p.new.status]?.[1]||p.new.status))}repChanged()})
+  .on('postgres_changes',{event:'INSERT',schema:'public',table:'report_messages'},p=>{if(p.new.sender_id!==me.id){snd('dm');toast('🚩 Report #'+p.new.report_id+': new message')}repChanged()})
+  .subscribe()}
 async function online(b,w){
  if(!sb)return noBack(b);
  const draw=async()=>{const k=Object.keys(onl),ids=k.filter(x=>/^[0-9a-f-]{36}$/i.test(x)),g=k.length-ids.length;
@@ -938,7 +1005,7 @@ async function online(b,w){
    ...u.map(x=>h('div',{className:'row'},av(x)?h('img',{src:av(x),width:20,height:20,style:'vertical-align:middle;margin-right:0.375rem;object-fit:cover'}):'',h('b',{style:'color:'+rc(x.role)+';cursor:pointer',on:{click:()=>openProfile(x)}},dn(x)),badge(x.role),h('small',{style:'opacity:.6'},' @'+x.login),stLine(onl[x.id]?.[0],x.id))))};
  w.draw=draw;draw();
 }
-const APPS=[['weather','Weather','☁',weather],['rss','News','📰',rss],['radio','Radio','📻',radio,360,420],['chat','Global Chat','💬',chat,400,440],['voice','Voice','🎙',voice,480,540],['profile','My Profile','🪪',profileApp,360,470],['online',"Who's Online",'🟢',online,320,380],['shop','Workshop','🛠',shop,460,520],['builder','App Builder','🧱',builder,500,540],['calc','Calculator','🧮',calc,270,340],['paint','Paint','🎨',paint,430,420],['snake','Snake','🐍',snake,350,400],['term','Terminal','⌨',term,420,300],['notes','Notepad','📝',notes,340,300],['levels','Levels','⭐',levelsApp,360,440],['clicker','Cookie Clicker','🍪',clicker,360,480],['dm','Messages','💌',dmApp,520,420],['powers','Powers','⚡',powers,400,480],['status','Status','🟢',statusApp,340,540],['settings','Settings','⚙',settings,340,220],['admin','Admin','🛡',admin,540,480],['about','About','💾',about,340,220],['bin','Recycle Bin','🗑',binApp,380,340]];
+const APPS=[['weather','Weather','☁',weather],['rss','News','📰',rss],['radio','Radio','📻',radio,360,420],['chat','Global Chat','💬',chat,400,440],['voice','Voice','🎙',voice,480,540],['profile','My Profile','🪪',profileApp,360,470],['online',"Who's Online",'🟢',online,320,380],['shop','Workshop','🛠',shop,460,520],['builder','App Builder','🧱',builder,500,540],['calc','Calculator','🧮',calc,270,340],['paint','Paint','🎨',paint,430,420],['snake','Snake','🐍',snake,350,400],['term','Terminal','⌨',term,420,300],['notes','Notepad','📝',notes,340,300],['levels','Levels','⭐',levelsApp,360,440],['clicker','Cookie Clicker','🍪',clicker,360,480],['dm','Messages','💌',dmApp,520,420],['powers','Powers','⚡',powers,400,480],['report','Report','🚩',reportApp,440,480],['status','Status','🟢',statusApp,340,540],['settings','Settings','⚙',settings,340,220],['admin','Admin','🛡',admin,540,480],['about','About','💾',about,340,220],['bin','Recycle Bin','🗑',binApp,380,340]];
 function lp(el,fn){let t,sx,sy;const c=()=>clearTimeout(t);
  el.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse')return;sx=e.clientX;sy=e.clientY;el._lp=0;const tg=e.target;t=setTimeout(()=>{el._lp=1;fn({clientX:sx,clientY:sy,target:tg,preventDefault(){},stopPropagation(){}})},500)});
  el.addEventListener('pointermove',e=>{if(Math.abs(e.clientX-sx)>10||Math.abs(e.clientY-sy)>10)c()});el.addEventListener('pointerup',c);el.addEventListener('pointercancel',c);
@@ -1001,7 +1068,7 @@ async function loadMe(){
   }
 
   curUid=me?.id||null;
-  startNotify();startFx();roster();loadCols();
+  startNotify();startFx();roster();loadCols();repStart();
   presence();
   desk();
   tray();
