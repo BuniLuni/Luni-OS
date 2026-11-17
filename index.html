@@ -458,7 +458,7 @@ async function vSig(m){const v=VC;if(!v||m.to!==me.id||(v.ignore[m.from]||0)>Dat
 async function vSync(){const v=VC;if(!v)return;
  const st=v.ch.presenceState(),ids=Object.keys(st).filter(u=>u!==me.id&&!((v.ignore[u]||0)>Date.now()));
  if(v.seen){ids.filter(u=>!v.seen.has(u)).forEach(()=>snd('join'));[...v.seen].filter(u=>!ids.includes(u)).forEach(()=>snd('leave'))}v.seen=new Set(ids);
- v.pm={};v.ps={};v.pn={};v.pt={};ids.forEach(u=>{v.pm[u]=!!st[u][0]?.m;v.ps[u]=!!st[u][0]?.s;v.pn[u]=!!st[u][0]?.n;v.pt[u]=!!st[u][0]?.t});
+ v.pm={};v.ps={};v.pn={};v.pt={};v.pa={};v.px={};ids.forEach(u=>{v.pm[u]=!!st[u][0]?.m;v.ps[u]=!!st[u][0]?.s;v.pn[u]=!!st[u][0]?.n;v.pt[u]=!!st[u][0]?.t;v.pa[u]=st[u][0]?.a;v.px[u]=st[u][0]?.x});
  v.blocked.forEach(u=>{if(!v.ps[u])v.blocked.delete(u)}); /* a stopped sharer gets a clean slate */
  v.watching.forEach(u=>{if(!v.ps[u])v.watching.delete(u)}); /* stop "watching" anyone who stopped sharing */
  /* Do not close WebRTC peers just because Presence temporarily omits them.
@@ -484,6 +484,23 @@ const rt=()=>{try{RC?.track(rpres())?.catch?.(()=>{})}catch{}};
 function roster(){if(RC){sb.removeChannel(RC);RC=null}RCS={};if(!sb||!me)return;
  RC=sb.channel('vcroster',{config:{presence:{key:me.id}}});
  RC.on('presence',{event:'sync'},()=>{RCS=RC.presenceState();wins.voice?.rdraw?.()}).subscribe(st=>{if(st==='SUBSCRIBED')rt()})}
+async function micList(v){try{v.mics=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='audioinput'&&d.deviceId);v.ui?.()}catch{}}
+async function micSwitch(id){const v=VC;if(!v||v.nomic)return;
+ let s;try{s=await navigator.mediaDevices.getUserMedia({audio:{deviceId:{exact:id},echoCancellation:true,noiseSuppression:true,autoGainControl:true}})}catch{return toast('Could not use that microphone')}
+ if(v!==VC){s.getTracks().forEach(t=>t.stop());return}
+ const nt=s.getAudioTracks()[0],old=v.stream;nt.enabled=!(v.self||v.forced.has(me.id));
+ Object.values(v.peers).forEach(p=>{const sd=p.pc.getSenders().find(x=>x.track&&x.track.kind==='audio');if(sd)sd.replaceTrack(nt).catch(()=>{})});
+ try{v.msrc.disconnect()}catch{}
+ v.msrc=v.ac.createMediaStreamSource(s);v.msrc.connect(v.sa);
+ v.stream=s;v.track=nt;v.micId=id;store.set('micid',id);
+ old.getTracks().forEach(t=>t.stop());toast('Microphone switched');micList(v)}
+/* one persistent dropdown so presence redraws don't close it while open */
+function micRow(v){if(v.nomic||!v.mics?.length)return '';
+ const key=v.mics.map(d=>d.deviceId+d.label).join('|'),cur=v.micId||v.track.getSettings?.().deviceId;
+ if(!v.micEl||v.micKey!==key){v.micKey=key;
+  const sel=h('select',{style:'max-width:100%'},...v.mics.map((d,i)=>h('option',{value:d.deviceId},d.label||('Microphone '+(i+1)))));
+  sel.onchange=()=>micSwitch(sel.value);v.micEl=h('div',{className:'row'},'🎤 Microphone ',sel)}
+ const s=v.micEl.querySelector('select');if(cur&&document.activeElement!==s)s.value=cur;return v.micEl}
 function vSpeak(m){const v=VC;
  if(!v||!m||typeof m.text!=='string'||m.from===me.id||!v.hear||!window.speechSynthesis)return;
  /* sender must currently be in the room, text-only, with TTS on, and not force-muted or kicked */
@@ -514,7 +531,7 @@ function shareStop(msg){const v=VC;if(!v||!v.share)return;const s=v.share;v.shar
  v.wants.clear();
  Object.values(v.peers).forEach(p=>p.vsender?.replaceTrack(null).catch(()=>{}));
  vApply();if(msg)toast(msg)}
-function voiceLeave(msg){const v=VC;if(!v)return;snd('leave');VC=null;try{speechSynthesis.cancel()}catch{}rt();clearInterval(v.tick);clearInterval(v.xpt);Object.keys(v.peers).forEach(u=>vClose(v,u));
+function voiceLeave(msg){const v=VC;if(!v)return;snd('leave');VC=null;try{speechSynthesis.cancel()}catch{}rt();navigator.mediaDevices?.removeEventListener?.('devicechange',v.dc);clearInterval(v.tick);clearInterval(v.xpt);Object.keys(v.peers).forEach(u=>vClose(v,u));
  v.share?.getTracks().forEach(t=>{t.onended=null;t.stop()});
  v.stream.getTracks().forEach(t=>t.stop());try{v.ac.close()}catch{}sb.removeChannel(v.ch);sb.removeChannel(v.act);if(v.cc)sb.removeChannel(v.cc);v.ui?.();tray();if(msg)toast(msg)}
 /* Returning to the tab can resume a browser-suspended AudioContext. Re-track
@@ -533,11 +550,11 @@ async function voiceJoin(c,ui,textOnly){
  /* no mic (or text-only chosen): send a silent stream so you can still hear everyone and chat */
  let stream,nomic=false;
  try{if(textOnly||!navigator.mediaDevices?.getUserMedia)throw 0;
-  stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}})}
+  stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true,...(store.get('micid','')?{deviceId:{ideal:store.get('micid','')}}:{})}})}
  catch{nomic=true;stream=ac.createMediaStreamDestination().stream;if(!textOnly)toast('No microphone available, joined in text-only mode')}
- const sa=ac.createAnalyser();sa.fftSize=512;ac.createMediaStreamSource(stream).connect(sa);
- const v=VC={id:c.id,name:c.name,stream,track:stream.getAudioTracks()[0],ac,sa,peers:{},forced:new Set(),ignore:{},pm:{},ps:{},pn:{},pt:{},tts:false,hear:store.get('vtts',true),lastTts:0,blocked:new Set(),wants:new Set(),watching:new Set(),vels:{},share:null,prof:{[me.id]:me},self:false,ready:false,ui,nomic,chat:null,cc:null};
- v.pres=()=>({m:v.self||v.forced.has(me.id)||v.nomic,s:!!v.share,n:v.nomic,t:!!(v.nomic&&v.tts)});
+ const sa=ac.createAnalyser();sa.fftSize=512;const msrc=ac.createMediaStreamSource(stream);msrc.connect(sa);
+ const v=VC={id:c.id,name:c.name,stream,track:stream.getAudioTracks()[0],ac,sa,peers:{},forced:new Set(),ignore:{},pm:{},ps:{},pn:{},pt:{},pa:{},px:{},tts:false,hear:store.get('vtts',true),lastTts:0,blocked:new Set(),wants:new Set(),watching:new Set(),vels:{},share:null,prof:{[me.id]:me},self:false,ready:false,ui,nomic,msrc,micId:null,mics:[],chat:null,cc:null};
+ v.pres=()=>({m:v.self||v.forced.has(me.id)||v.nomic,s:!!v.share,n:v.nomic,t:!!(v.nomic&&v.tts),a:effSt(),x:MYST.t.slice(0,60)});
  /* who is force-muted right now: latest mute/unmute per person */
  const acts=(await sb.from('voice_actions').select('target,action').eq('channel_id',c.id).in('action',['mute','unmute']).order('created_at',{ascending:false}).limit(300)).data||[],seen=new Set();
  acts.forEach(a=>{if(seen.has(a.target))return;seen.add(a.target);if(a.action==='mute')v.forced.add(a.target)});
@@ -552,7 +569,7 @@ async function voiceJoin(c,ui,textOnly){
   Object.entries(v.peers).forEach(([u,p])=>on[u]=!v.forced.has(u)&&!!p.an&&lvl(p.an)>.03);
   document.querySelectorAll('[data-vu]').forEach(e=>e.style.background=on[e.dataset.vu]?'var(--mint)':'#888')},150);
  v.xpt=setInterval(()=>{if(Object.keys(v.peers).length)sb.rpc('voice_xp').then(({data})=>setLv(data))},60000);
- snd('join');tray();ui?.()}
+ snd('join');tray();micList(v);navigator.mediaDevices?.addEventListener?.('devicechange',v.dc=()=>micList(v));ui?.()}
 
 /* text chat inside a voice room (persistent element so redraws don't wipe it) */
 function vchat(v){if(v.chat)return v.chat;
@@ -627,7 +644,7 @@ async function voice(b,w){
    return h('div',{className:'row'},h('span',{'data-vu':u,style:'display:inline-block;width:0.625rem;height:0.625rem;border-radius:50%;background:#888;border:1px solid var(--ink);margin-right:0.375rem'}),
     av(p)?h('img',{src:av(p),width:20,height:20,style:'vertical-align:middle;margin-right:0.3125rem;object-fit:cover'}):'',
     h('b',{style:'color:'+rc(p.role)+';cursor:pointer',on:{click:()=>p.id&&openProfile(p)}},dn(p)+(u===me.id?' (you)':'')),badge(p.role),
-    tx?' ⌨ text only'+((u===me.id?v.tts:v.pt[u])?' 🔊 TTS':''):fm?' 🔇 muted by mod':sm?' 🔇 mic off':'',sh?' 🖥 sharing':'',
+    tx?' ⌨ text only'+((u===me.id?v.tts:v.pt[u])?' 🔊 TTS':''):fm?' 🔇 muted by mod':sm?' 🔇 mic off':'',sh?' 🖥 sharing':'',stTag(u===me.id?stPres():{a:v.pa[u],x:v.px[u]}),
     mod?h('div',{style:'margin-top:0.1875rem'},h('button',{on:{click:()=>modAct(u,fm?'unmute':'mute')}},fm?'Unmute':'Force mute'),' ',sh?h('button',{on:{click:()=>modAct(u,'stopshare')}},'Stop share'):'',sh?' ':'',h('button',{on:{click:()=>{if(confirm('Kick '+dn(p)+' from #'+v.name+'?'))modAct(u,'kick')}}},'Kick')):'')});
   const canShare=can('screenshare')&&!!navigator.mediaDevices?.getDisplayMedia;
   const c=vchat(v),had=document.activeElement===c.inp;
@@ -636,7 +653,7 @@ async function voice(b,w){
    v.nomic?'':h('button',{disabled:v.forced.has(me.id),on:{click:()=>{v.self=!v.self;snd(v.self?'mute':'unmute');vApply()}}},v.self?'Unmute mic':'Mute mic'),h('button',{on:{click:()=>voiceLeave()}},'Leave')),
    v.forced.has(me.id)?h('p',{},'A moderator has muted you in this channel.'):'',
    h('div',{className:'row'},h('input',{type:'checkbox',checked:v.hear,onchange:e=>{v.hear=e.target.checked;store.set('vtts',v.hear);if(!v.hear)try{speechSynthesis.cancel()}catch{}}}),' 🔊 Hear text-only users’ messages read aloud'),
-   v.nomic?h('div',{className:'row'},h('input',{type:'checkbox',checked:v.tts,onchange:e=>{v.tts=e.target.checked;vApply()}}),' 🔊 Read my messages aloud (TTS) for everyone in the room'):'',
+   micRow(v),v.nomic?h('div',{className:'row'},h('input',{type:'checkbox',checked:v.tts,onchange:e=>{v.tts=e.target.checked;vApply()}}),' 🔊 Read my messages aloud (TTS) for everyone in the room'):'',
    ...stage,...rows,c.el,
    h('p',{style:'opacity:.7;font-size:1.0625rem'},'Voice and screen sharing are peer-to-peer, so it works best with about 6 people or fewer. Screen video is only sent to people who click Watch.'));
   c.list.scrollTop=1e9;if(had)c.inp.focus()};
@@ -646,7 +663,7 @@ async function voice(b,w){
   if(need.length)((await sb.from('profiles').select(PCOLS).in('id',need)).data||[]).forEach(p=>pc[p.id]=p);
   Object.entries(boxes).forEach(([id,box])=>{const l=m[id]||[];
    box.replaceChildren(...(l.length?l.map(([u,s])=>{const p=pc[u]||{login:'...',role:'user'};
-    return h('div',{},h('b',{style:'color:'+rc(p.role)},dn(p)),s.n?' ⌨'+(s.t?' 🔊':''):s.m?' 🔇':'',s.s?' 🖥':'')}):[h('small',{style:'opacity:.6'},'Nobody here')]))})};
+    return h('div',{},h('b',{style:'color:'+rc(p.role)},dn(p)),s.n?' ⌨'+(s.t?' 🔊':''):s.m?' 🔇':'',s.s?' 🖥':'',stTag(s))}):[h('small',{style:'opacity:.6'},'Nobody here')]))})};
  w.rdraw=()=>{if(!VC&&!closed)fillBoxes()};
  const lobby=async()=>{if(closed)return;b.textContent='Loading...';
   const d=(await sb.from('voice_channels').select('*').order('id')).data||[];
@@ -859,17 +876,39 @@ let onl={},pch=null,pid=null;const pkey='g'+(crypto.randomUUID?crypto.randomUUID
 function presence(){
  if(!sb)return;const id=me?me.id:'';if(pch&&id===pid)return;pid=id;if(pch)sb.removeChannel(pch);
  pch=sb.channel('online',{config:{presence:{key:me?me.id:pkey}}});
- pch.on('presence',{event:'sync'},()=>{onl=pch.presenceState();tray();wins.online?.draw?.()}).subscribe(async st=>{if(st==='SUBSCRIBED'&&!(me&&store.get('ghost',false)))await pch.track({t:Date.now()})});
+ pch.on('presence',{event:'sync'},()=>{onl=pch.presenceState();tray();wins.online?.draw?.()}).subscribe(async st=>{if(st==='SUBSCRIBED'&&!(me&&(store.get('ghost',false)||effSt()==='invisible')))await pch.track(Object.assign({t:Date.now()},stPres()))});
 }
+const ST={online:['🟢','Online'],idle:['🌙','Idle'],dnd:['⛔','Do Not Disturb'],invisible:['⚫','Invisible']};
+let MYST=Object.assign({s:'online',t:''},store.get('status',{})),autoIdle=false,lastAct=Date.now();
+if(!ST[MYST.s])MYST.s='online';
+const effSt=()=>MYST.s==='online'&&autoIdle?'idle':MYST.s;
+const stPres=()=>({a:effSt(),x:String(MYST.t||'').slice(0,60)});
+const stIcon=a=>(ST[a]||ST.online)[0];
+const stTag=p=>p&&p.a&&p.a!=='invisible'&&ST[p.a]?' '+stIcon(p.a)+(p.x?' ('+p.x+')':''):'';
+const stLine=p=>p&&p.a&&p.a!=='invisible'&&ST[p.a]?h('div',{style:'opacity:.8;font-size:.9em'},stIcon(p.a)+' '+(p.x||ST[p.a][1])):'';
+function stPush(){
+ if(pch&&me){try{if(store.get('ghost',false)||effSt()==='invisible')pch.untrack();else pch.track(Object.assign({t:Date.now()},stPres()))}catch{}}
+ if(VC&&VC.ready)try{VC.ch.track(VC.pres())}catch{}
+ rt();tray();wins.online?.draw?.()}
+['pointerdown','keydown'].forEach(ev=>addEventListener(ev,()=>{lastAct=Date.now();if(autoIdle){autoIdle=false;stPush()}},{passive:true}));
+setInterval(()=>{const i=Date.now()-lastAct>3e5;if(i!==autoIdle){autoIdle=i;stPush()}},30000);
+function statusApp(b){if(!me)return needLogin(b);
+ const t=h('input',{maxLength:60,placeholder:'Custom status (e.g. studying)',value:MYST.t,style:'width:100%'});
+ const keep=()=>{store.set('status',MYST);stPush()};
+ const save=()=>{MYST.t=t.value.trim();keep();toast('Status updated')};
+ b.append(...Object.entries(ST).map(([k,[i,n]])=>h('div',{className:'row'},h('label',{},h('input',{type:'radio',name:'st',checked:MYST.s===k,onchange:()=>{MYST.s=k;keep()}}),' '+i+' '+n+(k==='invisible'?' (appear offline)':'')))),
+  h('div',{style:'margin-top:0.375rem'},'Custom status'),t,
+  h('div',{className:'bar',style:'margin-top:0.375rem'},h('button',{on:{click:save}},'Save'),h('button',{on:{click:()=>{t.value='';save()}}},'Clear')),
+  h('small',{style:'opacity:.7'},'Online switches to Idle automatically after 5 minutes of no activity. Your status is saved on this device.'))}
 async function online(b,w){
  if(!sb)return noBack(b);
  const draw=async()=>{const k=Object.keys(onl),ids=k.filter(x=>/^[0-9a-f-]{36}$/i.test(x)),g=k.length-ids.length;
   const u=ids.length?((await sb.from('profiles').select(PCOLS).in('id',ids)).data||[]):[];
   b.replaceChildren(h('div',{className:'big'},String(k.length)),h('div',{},`online now: ${u.length} logged in, ${g} guest${g===1?'':'s'}`),
-   ...u.map(x=>h('div',{className:'row'},av(x)?h('img',{src:av(x),width:20,height:20,style:'vertical-align:middle;margin-right:0.375rem;object-fit:cover'}):'',h('b',{style:'color:'+rc(x.role)+';cursor:pointer',on:{click:()=>openProfile(x)}},dn(x)),badge(x.role),h('small',{style:'opacity:.6'},' @'+x.login))))};
+   ...u.map(x=>h('div',{className:'row'},av(x)?h('img',{src:av(x),width:20,height:20,style:'vertical-align:middle;margin-right:0.375rem;object-fit:cover'}):'',h('b',{style:'color:'+rc(x.role)+';cursor:pointer',on:{click:()=>openProfile(x)}},dn(x)),badge(x.role),h('small',{style:'opacity:.6'},' @'+x.login),stLine(onl[x.id]?.[0]))))};
  w.draw=draw;draw();
 }
-const APPS=[['weather','Weather','☁',weather],['rss','News','📰',rss],['radio','Radio','📻',radio,360,420],['chat','Global Chat','💬',chat,400,440],['voice','Voice','🎙',voice,480,540],['profile','My Profile','🪪',profileApp,360,470],['online',"Who's Online",'🟢',online,320,380],['shop','Workshop','🛠',shop,460,520],['builder','App Builder','🧱',builder,500,540],['calc','Calculator','🧮',calc,270,340],['paint','Paint','🎨',paint,430,420],['snake','Snake','🐍',snake,350,400],['term','Terminal','⌨',term,420,300],['notes','Notepad','📝',notes,340,300],['levels','Levels','⭐',levelsApp,360,440],['clicker','Cookie Clicker','🍪',clicker,360,480],['dm','Messages','💌',dmApp,520,420],['powers','Powers','⚡',powers,400,480],['settings','Settings','⚙',settings,340,220],['admin','Admin','🛡',admin,540,480],['about','About','💾',about,340,220],['bin','Recycle Bin','🗑',binApp,380,340]];
+const APPS=[['weather','Weather','☁',weather],['rss','News','📰',rss],['radio','Radio','📻',radio,360,420],['chat','Global Chat','💬',chat,400,440],['voice','Voice','🎙',voice,480,540],['profile','My Profile','🪪',profileApp,360,470],['online',"Who's Online",'🟢',online,320,380],['shop','Workshop','🛠',shop,460,520],['builder','App Builder','🧱',builder,500,540],['calc','Calculator','🧮',calc,270,340],['paint','Paint','🎨',paint,430,420],['snake','Snake','🐍',snake,350,400],['term','Terminal','⌨',term,420,300],['notes','Notepad','📝',notes,340,300],['levels','Levels','⭐',levelsApp,360,440],['clicker','Cookie Clicker','🍪',clicker,360,480],['dm','Messages','💌',dmApp,520,420],['powers','Powers','⚡',powers,400,480],['status','Status','🟢',statusApp,320,300],['settings','Settings','⚙',settings,340,220],['admin','Admin','🛡',admin,540,480],['about','About','💾',about,340,220],['bin','Recycle Bin','🗑',binApp,380,340]];
 function lp(el,fn){let t,sx,sy;const c=()=>clearTimeout(t);
  el.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse')return;sx=e.clientX;sy=e.clientY;el._lp=0;const tg=e.target;t=setTimeout(()=>{el._lp=1;fn({clientX:sx,clientY:sy,target:tg,preventDefault(){},stopPropagation(){}})},500)});
  el.addEventListener('pointermove',e=>{if(Math.abs(e.clientX-sx)>10||Math.abs(e.clientY-sy)>10)c()});el.addEventListener('pointerup',c);el.addEventListener('pointercancel',c);
@@ -908,7 +947,7 @@ addEventListener('pointerdown',e=>{if(!e.target.closest('#ctx'))$('#ctx').classL
 addEventListener('keydown',e=>e.key==='Escape'&&$('#ctx').classList.remove('on'));
 addEventListener('contextmenu',e=>{if(!e.target.closest('input,textarea'))e.preventDefault()});
 function tray(){
- const t=$('#tray');t.replaceChildren(nowp?h('span',{},'♪ '+nowp.slice(0,18)+' '):'',VC?h('button',{on:{click:()=>openApp('voice')}},'🎙 '+VC.name):'',Object.keys(onl).length?h('button',{on:{click:()=>openApp('online')}},'● '+Object.keys(onl).length):'',me&&unreadTotal()?h('button',{on:{click:()=>openApp('dm')}},'💌 '+unreadTotal()):'',me?h('button',{on:{click:()=>openApp('levels')}},'⭐ Lv '+lvOf(LV.xp)):'',me?h('button',{on:{click:async()=>{await sb.auth.signOut()}}},`${dn(me)} [${me.role}] - log out`):h('button',{on:{click:login}},'Log in with GitHub'),' ',h('span',{id:'clk'}));clock()}
+ const t=$('#tray');t.replaceChildren(nowp?h('span',{},'♪ '+nowp.slice(0,18)+' '):'',VC?h('button',{on:{click:()=>openApp('voice')}},'🎙 '+VC.name):'',Object.keys(onl).length?h('button',{on:{click:()=>openApp('online')}},'● '+Object.keys(onl).length):'',me&&unreadTotal()?h('button',{on:{click:()=>openApp('dm')}},'💌 '+unreadTotal()):'',me?h('button',{title:'Set status',on:{click:()=>openApp('status')}},stIcon(effSt())+(MYST.t?' '+MYST.t.slice(0,12):'')):'',me?h('button',{on:{click:()=>openApp('levels')}},'⭐ Lv '+lvOf(LV.xp)):'',me?h('button',{on:{click:async()=>{await sb.auth.signOut()}}},`${dn(me)} [${me.role}] - log out`):h('button',{on:{click:login}},'Log in with GitHub'),' ',h('span',{id:'clk'}));clock()}
 const clock=()=>{const c=$('#clk');if(c)c.textContent=new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})};
 async function loadMe(){
   voiceLeave();
