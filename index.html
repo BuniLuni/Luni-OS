@@ -36,6 +36,9 @@ textarea{width:100%;font-family:monospace;font-size:14px}
 #toast{position:fixed;top:10px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--mint);padding:4px 12px;z-index:10000;display:none}
 #ann{position:absolute;top:0;left:0;right:0;background:var(--pink);color:#fff;padding:4px 10px;z-index:8000;display:none}
 body.noscan::after{display:none}
+#credit{color:var(--ink);font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto;max-width:36vw}
+.body a{color:#5b1fb5}
+@media(max-width:600px){#credit{max-width:28vw;font-size:15px}}
 #ctx{position:fixed;display:none;z-index:9500;min-width:170px;background:var(--win);border:2px solid;border-color:var(--hi) var(--ink) var(--ink) var(--hi);box-shadow:4px 4px 0 rgba(0,0,0,.4)}
 #ctx.on{display:block}#ctx button{display:block;width:100%;text-align:left;border:0;padding:4px 10px}#ctx button:hover{background:var(--pink);color:#fff}#ctx hr{margin:2px 0;border:0;border-top:1px solid var(--lo)}
 @media(max-width:600px){
@@ -50,10 +53,10 @@ body.noscan::after{display:none}
 @media(prefers-reduced-motion:no-preference){.start{animation:p 1.6s steps(2) infinite}@keyframes p{50%{background:var(--mint)}}}
 </style></head><body>
 <div id="desk"></div><div id="ann"></div><div id="menu"></div><div id="toast"></div><div id="ctx"></div>
-<div id="tb"><button id="start" class="start">Luni's Thing</button><div id="tasks"></div><span id="tray"></span></div>
+<div id="tb"><button id="start" class="start">Luni's Thing</button><div id="tasks"></div><a id="credit" href="https://radiusos.ignorelist.com/" target="_blank" rel="noopener noreferrer">Radius did it first and better (Radius OS)</a><span id="tray"></span></div>
 <script>
 /* ====== CONFIG: paste your Supabase values (see schema.sql) ====== */
-const CFG={url:'https://cyjyuvrarekwlefxcqui.supabase.co',key:'sb_publishable_E2_jmyi7lsaceSdaVGeQAg_FvsDUTpb'};
+const CFG={url:'',key:''};
 /* ================================================================= */
 const $=s=>document.querySelector(s);
 const h=(t,p,...k)=>{const e=document.createElement(t);for(const x in p||{}){if(x==='on')for(const y in p.on)e.addEventListener(y,p.on[y]);else if(x in e)e[x]=p[x];else e.setAttribute(x,p[x])}k.flat().forEach(c=>e.append(c));return e};
@@ -184,7 +187,7 @@ async function admin(b){
  Object.keys(T).filter(k=>top||!['Announce','Settings','Log'].includes(k)).forEach(k=>bar.append(h('button',{on:{click:()=>{pane.textContent='Loading...';T[k]()}}},k)));
  b.append(bar,pane);T.Users();
 }
-function about(b){b.append(h('h2',{},"Luni's dumbass Thing"),h('p',{},'A tiny operating system that lives in your browser. Built by BuniLuni.'),h('p',{},'Make an app in the Workshop, publish it, and everyone can install it.'))}
+function about(b){b.append(h('h2',{},"Luni's dumbass Thing"),h('p',{},'A tiny operating system that lives in your browser. Built by BuniLuni.'),h('p',{},'Make an app in the Workshop, publish it, and everyone can install it.'),h('p',{},'Radius did it first and better (',h('a',{href:'https://radiusos.ignorelist.com/',target:'_blank',rel:'noopener noreferrer'},'Radius OS'),')'))}
 
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const BT={Heading:['Text'],Paragraph:['Text'],Button:['Label','Message shown on click'],Counter:['Label'],Link:['Link text','URL (https://...)'],Image:['Image URL (https://...)'],Divider:[]};
@@ -245,7 +248,21 @@ function settings(b){
 async function loadAnn(){const a=$('#ann'),d=$('#desk');a.style.display='none';d.style.top='0';if(!sb)return;
  const r=(await sb.from('announcements').select('*').order('created_at',{ascending:false}).limit(1)).data?.[0];if(!r||store.get('annx')===r.id)return;
  a.replaceChildren('📢 '+r.body+' ',h('button',{on:{click:()=>{store.set('annx',r.id);loadAnn()}}},'dismiss'));a.style.display='block';d.style.top='34px'}
-const APPS=[['weather','Weather','☁',weather],['rss','News','📰',rss],['radio','Radio','📻',radio,360,420],['chat','Global Chat','💬',chat,400,440],['shop','Workshop','🛠',shop,460,520],['builder','App Builder','🧱',builder,500,540],['calc','Calculator','🧮',calc,270,340],['paint','Paint','🎨',paint,430,420],['snake','Snake','🐍',snake,350,400],['term','Terminal','⌨',term,420,300],['notes','Notepad','📝',notes,340,300],['settings','Settings','⚙',settings,340,220],['admin','Admin','🛡',admin,540,480],['about','About','💾',about,340,220],['bin','Recycle Bin','🗑',binApp,380,340]];
+let onl={},pch=null,pid=null;const pkey='g'+(crypto.randomUUID?crypto.randomUUID():Math.random());
+function presence(){
+ if(!sb)return;const id=me?me.id:'';if(pch&&id===pid)return;pid=id;if(pch)sb.removeChannel(pch);
+ pch=sb.channel('online',{config:{presence:{key:me?me.id:pkey}}});
+ pch.on('presence',{event:'sync'},()=>{onl=pch.presenceState();tray();wins.online?.draw?.()}).subscribe(async st=>{if(st==='SUBSCRIBED')await pch.track({t:Date.now()})});
+}
+async function online(b,w){
+ if(!sb)return noBack(b);
+ const draw=async()=>{const k=Object.keys(onl),ids=k.filter(x=>/^[0-9a-f-]{36}$/i.test(x)),g=k.length-ids.length;
+  const u=ids.length?((await sb.from('profiles').select('login,avatar,role').in('id',ids)).data||[]):[];
+  b.replaceChildren(h('div',{className:'big'},String(k.length)),h('div',{},`online now: ${u.length} logged in, ${g} guest${g===1?'':'s'}`),
+   ...u.map(x=>h('div',{className:'row'},/^https:\/\/avatars\.githubusercontent\.com\//.test(x.avatar||'')?h('img',{src:x.avatar,width:20,height:20,style:'vertical-align:middle;margin-right:6px'}):'',h('b',{className:'r-'+x.role},x.login),` [${x.role}]`)))};
+ w.draw=draw;draw();
+}
+const APPS=[['weather','Weather','☁',weather],['rss','News','📰',rss],['radio','Radio','📻',radio,360,420],['chat','Global Chat','💬',chat,400,440],['online',"Who's Online",'🟢',online,320,380],['shop','Workshop','🛠',shop,460,520],['builder','App Builder','🧱',builder,500,540],['calc','Calculator','🧮',calc,270,340],['paint','Paint','🎨',paint,430,420],['snake','Snake','🐍',snake,350,400],['term','Terminal','⌨',term,420,300],['notes','Notepad','📝',notes,340,300],['settings','Settings','⚙',settings,340,220],['admin','Admin','🛡',admin,540,480],['about','About','💾',about,340,220],['bin','Recycle Bin','🗑',binApp,380,340]];
 function lp(el,fn){let t,sx,sy;const c=()=>clearTimeout(t);
  el.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse')return;sx=e.clientX;sy=e.clientY;el._lp=0;const tg=e.target;t=setTimeout(()=>{el._lp=1;fn({clientX:sx,clientY:sy,target:tg,preventDefault(){},stopPropagation(){}})},500)});
  el.addEventListener('pointermove',e=>{if(Math.abs(e.clientX-sx)>10||Math.abs(e.clientY-sy)>10)c()});el.addEventListener('pointerup',c);el.addEventListener('pointercancel',c);
@@ -284,9 +301,9 @@ addEventListener('pointerdown',e=>{if(!e.target.closest('#ctx'))$('#ctx').classL
 addEventListener('keydown',e=>e.key==='Escape'&&$('#ctx').classList.remove('on'));
 addEventListener('contextmenu',e=>{if(!e.target.closest('input,textarea'))e.preventDefault()});
 function tray(){
- const t=$('#tray');t.replaceChildren(nowp?h('span',{},'♪ '+nowp.slice(0,18)+' '):'',me?h('button',{on:{click:async()=>{await sb.auth.signOut()}}},`${me.login} [${me.role}] - log out`):h('button',{on:{click:login}},'Log in with GitHub'),' ',h('span',{id:'clk'}));clock()}
+ const t=$('#tray');t.replaceChildren(nowp?h('span',{},'♪ '+nowp.slice(0,18)+' '):'',Object.keys(onl).length?h('button',{on:{click:()=>openApp('online')}},'● '+Object.keys(onl).length):'',me?h('button',{on:{click:async()=>{await sb.auth.signOut()}}},`${me.login} [${me.role}] - log out`):h('button',{on:{click:login}},'Log in with GitHub'),' ',h('span',{id:'clk'}));clock()}
 const clock=()=>{const c=$('#clk');if(c)c.textContent=new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})};
-async function loadMe(){me=null;if(sb){const{data:{session}}=await sb.auth.getSession();if(session)me=(await sb.from('profiles').select('*').eq('id',session.user.id).single()).data}desk();tray()}
+async function loadMe(){me=null;if(sb){const{data:{session}}=await sb.auth.getSession();if(session)me=(await sb.from('profiles').select('*').eq('id',session.user.id).single()).data}presence();desk();tray()}
 $('#start').onclick=()=>$('#menu').classList.toggle('on');
 $('#desk').onclick=()=>$('#menu').classList.remove('on');
 sb?.auth.onAuthStateChange(()=>setTimeout(loadMe,0));
