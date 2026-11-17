@@ -35,10 +35,12 @@ textarea{width:100%;font-family:monospace;font-size:14px}
 #toast{position:fixed;top:10px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--mint);padding:4px 12px;z-index:10000;display:none}
 #ann{position:absolute;top:0;left:0;right:0;background:var(--pink);color:#fff;padding:4px 10px;z-index:8000;display:none}
 body.noscan::after{display:none}
+#ctx{position:fixed;display:none;z-index:9500;min-width:170px;background:var(--win);border:2px solid;border-color:var(--hi) var(--ink) var(--ink) var(--hi);box-shadow:4px 4px 0 rgba(0,0,0,.4)}
+#ctx.on{display:block}#ctx button{display:block;width:100%;text-align:left;border:0;padding:4px 10px}#ctx button:hover{background:var(--pink);color:#fff}#ctx hr{margin:2px 0;border:0;border-top:1px solid var(--lo)}
 @media(max-width:600px){.w{left:0!important;top:0!important;width:100%!important;height:calc(100% - 40px)!important}}
 @media(prefers-reduced-motion:no-preference){.start{animation:p 1.6s steps(2) infinite}@keyframes p{50%{background:var(--mint)}}}
 </style></head><body>
-<div id="desk"></div><div id="ann"></div><div id="menu"></div><div id="toast"></div>
+<div id="desk"></div><div id="ann"></div><div id="menu"></div><div id="toast"></div><div id="ctx"></div>
 <div id="tb"><button id="start" class="start">Luni's Thing</button><div id="tasks"></div><span id="tray"></span></div>
 <script>
 /* ====== CONFIG: paste your Supabase values (see schema.sql) ====== */
@@ -64,6 +66,7 @@ function win(id,title,icon,fn,wd=440,ht=400){
  const task=h('button',{on:{click:()=>el.classList.contains('hide')||el.style.zIndex==z?el.classList.toggle('hide'):front(w)}},icon+' '+title);
  const x=()=>{w.onclose&&w.onclose();el.remove();task.remove();delete wins[id]};
  const tb=h('div',{className:'tb'},icon+' '+title,h('span',{},h('button',{on:{click:()=>el.classList.add('hide')}},'_'),h('button',{on:{click:x}},'x')));
+ const cm=e=>{e.stopPropagation();menu(e,[['Minimize / Restore',()=>task.click()],['Close',x]])};task.oncontextmenu=cm;tb.oncontextmenu=cm;
  tb.onpointerdown=e=>{if(e.target.tagName==='BUTTON')return;front(w);el.classList.add('drag');const ox=e.clientX-el.offsetLeft,oy=e.clientY-el.offsetTop;
   const mv=m=>{el.style.left=Math.max(0,m.clientX-ox)+'px';el.style.top=Math.max(0,m.clientY-oy)+'px'};
   const up=()=>{el.classList.remove('drag');removeEventListener('pointermove',mv);removeEventListener('pointerup',up)};addEventListener('pointermove',mv);addEventListener('pointerup',up)};
@@ -233,12 +236,39 @@ function settings(b){
 async function loadAnn(){const a=$('#ann'),d=$('#desk');a.style.display='none';d.style.top='0';if(!sb)return;
  const r=(await sb.from('announcements').select('*').order('created_at',{ascending:false}).limit(1)).data?.[0];if(!r||store.get('annx')===r.id)return;
  a.replaceChildren('📢 '+r.body+' ',h('button',{on:{click:()=>{store.set('annx',r.id);loadAnn()}}},'dismiss'));a.style.display='block';d.style.top='34px'}
-const APPS=[['weather','Weather','☁',weather],['rss','News','📰',rss],['radio','Radio','📻',radio,360,420],['chat','Global Chat','💬',chat,400,440],['shop','Workshop','🛠',shop,460,520],['builder','App Builder','🧱',builder,500,540],['calc','Calculator','🧮',calc,270,340],['paint','Paint','🎨',paint,430,420],['snake','Snake','🐍',snake,350,400],['term','Terminal','⌨',term,420,300],['notes','Notepad','📝',notes,340,300],['settings','Settings','⚙',settings,340,220],['admin','Admin','🛡',admin,540,480],['about','About','💾',about,340,220]];
-function desk(){
- const d=$('#desk'),m=$('#menu');d.replaceChildren();m.replaceChildren();
- const items=[...APPS.filter(a=>a[0]!=='admin'||staff()).map(a=>[a[2],a[1],()=>win(a[0],a[1],a[2],a[3],a[4],a[5])]),...store.get('apps',[]).map(a=>[a.icon,a.name,()=>runApp(a)])];
- items.forEach(([i,n,f])=>{d.append(h('button',{className:'ic',on:{dblclick:f,keydown:e=>e.key==='Enter'&&f(),click:e=>matchMedia('(pointer:coarse)').matches&&f()}},h('i',{},i),n));m.append(h('button',{on:{click:()=>{f();m.classList.remove('on')}}},i+' '+n))});
+const APPS=[['weather','Weather','☁',weather],['rss','News','📰',rss],['radio','Radio','📻',radio,360,420],['chat','Global Chat','💬',chat,400,440],['shop','Workshop','🛠',shop,460,520],['builder','App Builder','🧱',builder,500,540],['calc','Calculator','🧮',calc,270,340],['paint','Paint','🎨',paint,430,420],['snake','Snake','🐍',snake,350,400],['term','Terminal','⌨',term,420,300],['notes','Notepad','📝',notes,340,300],['settings','Settings','⚙',settings,340,220],['admin','Admin','🛡',admin,540,480],['about','About','💾',about,340,220],['bin','Recycle Bin','🗑',binApp,380,340]];
+const bin=()=>store.get('bin',[]);
+const openApp=id=>{const a=APPS.find(x=>x[0]===id);a&&win(a[0],a[1],a[2],a[3],a[4],a[5])};
+function menu(e,items){e.preventDefault();const m=$('#ctx');
+ m.replaceChildren(...items.map(([n,f])=>n==='-'?h('hr'):h('button',{on:{click:()=>{m.classList.remove('on');f()}}},n)));
+ m.classList.add('on');m.style.left=Math.max(0,Math.min(e.clientX,innerWidth-m.offsetWidth-4))+'px';m.style.top=Math.max(0,Math.min(e.clientY,innerHeight-m.offsetHeight-4))+'px'}
+function trash(it){const B=bin();B.push(it);store.set('bin',B);desk();wins.bin?.draw?.();toast('Moved to Recycle Bin')}
+function binApp(b,w){
+ const save=B=>{store.set('bin',B);desk();draw()};
+ const restore=i=>{const B=bin(),x=B.splice(i,1)[0];if(x.k==='usr'){const l=store.get('apps',[]);if(!l.find(y=>y.id===x.id))l.push(x.app);store.set('apps',l)}save(B)};
+ const del=i=>{const B=bin();B.splice(i,1);save(B)};
+ const empty=()=>{const n=bin().filter(x=>x.k==='sys').length;save([]);toast(n?'Bin emptied. System apps were put back.':'Bin emptied')};
+ const draw=()=>{const B=bin();b.replaceChildren(h('div',{className:'bar'},h('button',{on:{click:empty}},'Empty bin')),
+  ...(B.length?B.map((x,i)=>h('div',{className:'row'},`${x.i||'📦'} ${x.n}${x.k==='sys'?' (system app) ':' '}`,h('button',{on:{click:()=>restore(i)}},'Restore'),x.k==='usr'?h('button',{on:{click:()=>del(i)}},'Delete forever'):'')):[h('p',{},'The bin is empty.')]))};
+ w.draw=draw;draw();
 }
+function desk(){
+ const d=$('#desk'),m=$('#menu'),B=bin();d.replaceChildren();m.replaceChildren();
+ const hid=B.filter(x=>x.k==='sys').map(x=>x.id);
+ const items=[
+  ...APPS.filter(a=>(a[0]!=='admin'||staff())&&!hid.includes(a[0])).map(a=>({bin:a[0]==='bin',i:a[2],n:a[0]==='bin'&&B.length?`Recycle Bin (${B.length})`:a[1],f:()=>win(a[0],a[1],a[2],a[3],a[4],a[5]),del:a[0]==='bin'?null:()=>trash({k:'sys',id:a[0],n:a[1],i:a[2]})})),
+  ...store.get('apps',[]).map(a=>({i:a.icon,n:a.name,f:()=>runApp(a),del:()=>{store.set('apps',store.get('apps',[]).filter(x=>x.id!==a.id));trash({k:'usr',id:a.id,n:a.name,i:a.icon,app:a})}}))];
+ const bi=items.findIndex(x=>x.bin);if(bi>-1)items.push(items.splice(bi,1)[0]);
+ items.forEach(x=>{d.append(h('button',{className:'ic',on:{dblclick:x.f,keydown:e=>e.key==='Enter'&&x.f(),click:e=>matchMedia('(pointer:coarse)').matches&&x.f(),contextmenu:e=>{e.stopPropagation();menu(e,[['Open',x.f],...(x.del?[['-'],['Delete',x.del]]:[])])}}},h('i',{},x.i),x.n));
+  m.append(h('button',{on:{click:()=>{x.f();m.classList.remove('on')}}},x.i+' '+x.n))});
+}
+$('#desk').oncontextmenu=e=>menu(e,[['Refresh',()=>{desk();loadAnn()}],['New app...',()=>openApp('builder')],
+ ['Next wallpaper',()=>{const k=Object.keys(WP),t=store.get('set',{wp:'Grape',scan:true});t.wp=k[(k.indexOf(t.wp)+1)%k.length];store.set('set',t);applySettings()}],
+ ['Toggle CRT scanlines',()=>{const t=store.get('set',{wp:'Grape',scan:true});t.scan=!t.scan;store.set('set',t);applySettings()}],
+ ['-'],['Recycle Bin',()=>openApp('bin')],['Settings',()=>openApp('settings')]]);
+addEventListener('pointerdown',e=>{if(!e.target.closest('#ctx'))$('#ctx').classList.remove('on')},true);
+addEventListener('keydown',e=>e.key==='Escape'&&$('#ctx').classList.remove('on'));
+addEventListener('contextmenu',e=>{if(!e.target.closest('input,textarea'))e.preventDefault()});
 function tray(){
  const t=$('#tray');t.replaceChildren(nowp?h('span',{},'♪ '+nowp.slice(0,18)+' '):'',me?h('button',{on:{click:async()=>{await sb.auth.signOut()}}},`${me.login} [${me.role}] - log out`):h('button',{on:{click:login}},'Log in with GitHub'),' ',h('span',{id:'clk'}));clock()}
 const clock=()=>{const c=$('#clk');if(c)c.textContent=new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})};
