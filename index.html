@@ -256,6 +256,8 @@ if(me&&(can('delete_messages')||me.id===m.user_id))
 
 /* ---- owner powers: effects are broadcast; receivers verify the sender really is an owner, honour the opt-out, and every effect is temporary ---- */
 const isOwner=()=>myRoleNames.includes('owner')||me?.role==='owner';
+let POWERS=new Set();const hasPowers=()=>isOwner()||(!!me&&POWERS.has(me.id));
+async function loadPow(){POWERS=new Set(((await sb.from('power_users').select('user_id')).data||[]).map(r=>r.user_id))}
 function fxRun(k,t,nm){const D=document.body,ov=h('div',{style:'position:fixed;inset:0;pointer-events:none;z-index:99999;overflow:hidden'});D.append(ov);setTimeout(()=>ov.remove(),7000);
  const W=()=>[...document.querySelectorAll('.w,.ic')],mid=[innerWidth/2,innerHeight/2];
  if(k==='confetti')for(let i=0;i<90;i++){const e=h('div',{style:`position:absolute;top:-30px;left:${Math.random()*100}%;font-size:${16+Math.random()*20}px`},['🎉','✨','🎊','💖','⭐'][i%5]);ov.append(e);e.animate([{transform:'translateY(0) rotate(0)'},{transform:`translateY(${innerHeight+60}px) rotate(${Math.random()*720}deg)`}],{duration:2500+Math.random()*3000,easing:'ease-in'})}
@@ -272,14 +274,19 @@ function fxRun(k,t,nm){const D=document.body,ov=h('div',{style:'position:fixed;i
  else if(k==='bot'){ov.append(h('div',{style:'position:absolute;top:60px;right:20px;background:var(--win);border:3px solid var(--pink);padding:10px 16px;font-size:20px;max-width:60vw;box-shadow:5px 5px 0 rgba(0,0,0,.4)'},'🤖 '+String(nm||'Bot').slice(0,20)+' [bot]: '+String(t||'').slice(0,200)));snd('dm')}
  else if(k==='popup'){ov.append(h('div',{style:'position:absolute;top:30%;left:50%;transform:translateX(-50%);background:var(--win);border:3px solid var(--pink);padding:18px 28px;font-size:26px;box-shadow:6px 6px 0 rgba(0,0,0,.4);text-align:center;max-width:80vw'},'📣 '+String(t||'').slice(0,200)));snd('note')}}
 let FXC=null;
-function startFx(){if(FXC){sb.removeChannel(FXC);FXC=null}if(!sb||!me)return;
+async function startFx(){if(FXC){sb.removeChannel(FXC);FXC=null}if(!sb||!me)return;await loadPow();desk();
  FXC=sb.channel('fx').on('broadcast',{event:'fx'},async({payload:f})=>{if(!f?.from||store.get('nofx',false)||(f.to&&!f.to.includes(me.id)))return;
-  const[a,c]=await Promise.all([sb.from('profile_roles').select('role_name').eq('user_id',f.from).eq('role_name','owner'),sb.from('profiles').select('role').eq('id',f.from).eq('role','owner')]);if(a.data?.length||c.data?.length)fxRun(f.k,f.t,f.n)}).subscribe()}
+  const[a,c,d]=await Promise.all([sb.from('profile_roles').select('role_name').eq('user_id',f.from).eq('role_name','owner'),sb.from('profiles').select('role').eq('id',f.from).eq('role','owner'),sb.from('power_users').select('user_id').eq('user_id',f.from)]);
+  if(a.data?.length||c.data?.length||d.data?.length)fxRun(f.k,f.t,f.n)})
+  .on('postgres_changes',{event:'*',schema:'public',table:'power_users'},async()=>{await loadPow();desk()}).subscribe()}
 async function powers(b){
- if(!isOwner())return b.append(h('p',{},'Owner only.'));
- const us=((await sb.from('profiles').select('id,login,display_name').neq('id',me.id).order('login')).data||[]),
+ if(!hasPowers())return b.append(h('p',{},'You do not have access to Powers.'));
+ const us=((await sb.from('profiles').select('id,login,display_name').order('login')).data||[]),
   scope=h('select',{},h('option',{value:'all'},'Everyone online'),h('option',{value:'sel'},'Only the users picked below'),h('option',{value:'me'},'Just me (preview)')),
   sel=h('select',{multiple:true,size:5,style:'width:100%'},...us.map(u=>h('option',{value:u.id},dn(u)+' @'+u.login))),
+  amt=h('input',{type:'number',min:1,value:100,style:'width:80px'}),
+  xp=async sg=>{const t=[...sel.selectedOptions].map(o=>o.value);if(!t.length)return toast('Pick users in the list first');const d=Math.abs(parseInt(amt.value)||0)*sg;if(!d)return toast('Enter an amount');
+   const{data,error}=await sb.rpc('owner_adjust_xp',{targets:t,delta:d});toast(error?error.message:(d>0?'Added ':'Revoked ')+Math.abs(d)+' XP for '+data+' user(s)')},
   txt=h('input',{placeholder:'Text',maxLength:200}),bn=h('input',{placeholder:'Bot name',maxLength:20,value:'Totally Real Bot'}),
   fire=(k,t,n)=>{const to=scope.value==='sel'?[...sel.selectedOptions].map(o=>o.value):null;if(scope.value==='sel'&&!to.length)return toast('Pick at least one user');
    if(scope.value!=='sel')fxRun(k,t,n);if(scope.value!=='me'&&FXC)FXC.send({type:'broadcast',event:'fx',payload:{from:me.id,k,t,n,to}})},
@@ -293,6 +300,7 @@ async function powers(b){
   h('div',{className:'bar'},bn,B('🤖 Send as bot',()=>txt.value.trim()&&fire('bot',txt.value.trim(),bn.value.trim()||'Bot'))),
   h('div',{className:'row'},gh,' 👻 Ghost mode (hide from Who\'s Online)'),
   h('div',{className:'bar'},B('🔇 Mute everyone in my voice room',()=>vm('mute')),B('🔊 Unmute everyone',()=>vm('unmute'))),
+  isOwner()?h('div',{className:'bar'},'⭐ XP for users picked above:',amt,B('➕ Add',()=>xp(1)),B('➖ Revoke',()=>xp(-1))):'',
   h('div',{className:'bar'},B('🔒 Lock chat',()=>lock(true)),B('🔓 Unlock chat',()=>lock(false))),
   h('small',{style:'opacity:.7'},'Bot messages are always labelled [bot]. Anyone can switch effects off in Settings.'))}
 /* ---- levels + cookie clicker ---- */
@@ -683,7 +691,8 @@ async function admin(b){
     }}},current.includes('banned')?'Unban':'Ban');
    }
    const reset=can('ban')&&manageable&&(p.display_name||p.bio||p.custom_avatar)?h('button',{on:{click:async()=>{const{error}=await sb.from('profiles').update({display_name:null,bio:null,custom_avatar:null}).eq('id',p.id);if(error)return toast(error.message);log('reset profile of '+p.login);Object.assign(p,{display_name:null,bio:null,custom_avatar:null});draw()}}},'Reset profile'):'';
-   return h('div',{className:'row'},h('b',{style:'color:'+rc(p.role)},dn(p)),` @${p.login} [${current.join(' + ')}] `,controls,reset);
+   const pw=isOwner()&&p.id!==me.id?h('button',{style:'margin-left:6px',on:{click:async()=>{const on=!POWERS.has(p.id),{error}=await sb.rpc('owner_set_power',{target:p.id,enabled:on});if(error)return toast(error.message);on?POWERS.add(p.id):POWERS.delete(p.id);toast(on?'Powers tab given to '+p.login:'Powers tab removed from '+p.login);draw()}}},POWERS.has(p.id)?'⚡ Revoke Powers':'⚡ Give Powers'):'';
+   return h('div',{className:'row'},h('b',{style:'color:'+rc(p.role)},dn(p)),` @${p.login} [${current.join(' + ')}] `,controls,reset,pw);
   }));
   q.oninput=draw;pane.replaceChildren(q,l);draw()},
  Roles:async()=>{await loadRoles();
@@ -846,7 +855,7 @@ function desk(){
  const d=$('#desk'),m=$('#menu'),B=bin();d.replaceChildren();m.replaceChildren();
  const hid=B.filter(x=>x.k==='sys').map(x=>x.id);
  const items=[
-  ...APPS.filter(a=>(a[0]!=='admin'||staff())&&(a[0]!=='powers'||isOwner())&&!hid.includes(a[0])).map(a=>({bin:a[0]==='bin',i:a[2],n:a[0]==='bin'&&B.length?`Recycle Bin (${B.length})`:a[1],f:()=>win(a[0],a[1],a[2],a[3],a[4],a[5]),del:a[0]==='bin'?null:()=>trash({k:'sys',id:a[0],n:a[1],i:a[2]})})),
+  ...APPS.filter(a=>(a[0]!=='admin'||staff())&&(a[0]!=='powers'||hasPowers())&&!hid.includes(a[0])).map(a=>({bin:a[0]==='bin',i:a[2],n:a[0]==='bin'&&B.length?`Recycle Bin (${B.length})`:a[1],f:()=>win(a[0],a[1],a[2],a[3],a[4],a[5]),del:a[0]==='bin'?null:()=>trash({k:'sys',id:a[0],n:a[1],i:a[2]})})),
   ...store.get('apps',[]).map(a=>({i:a.icon,n:a.name,f:()=>runApp(a),del:()=>{store.set('apps',store.get('apps',[]).filter(x=>x.id!==a.id));trash({k:'usr',id:a.id,n:a.name,i:a.icon,app:a})}}))];
  const bi=items.findIndex(x=>x.bin);if(bi>-1)items.push(items.splice(bi,1)[0]);
  items.forEach(x=>{const mi=e=>{e.stopPropagation();menu(e,[['Open',x.f],...(x.del?[['-'],['Delete',x.del]]:[])])};const bt=h('button',{className:'ic',on:{dblclick:x.f,keydown:e=>e.key==='Enter'&&x.f(),click:e=>matchMedia('(pointer:coarse)').matches&&x.f(),contextmenu:mi}},h('i',{},x.i),x.n);lp(bt,mi);d.append(bt);
