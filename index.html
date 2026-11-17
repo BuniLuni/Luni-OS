@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Luni's dumbass Thing</title>
 <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
@@ -9,7 +9,8 @@
 html,body{height:100%;margin:0;overflow:hidden}
 body{background:radial-gradient(circle at 30% 20%,#4a2d85,var(--bg) 60%);font:21px/1.15 'VT323',monospace;color:var(--ink)}
 body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:9999;background:repeating-linear-gradient(0deg,rgba(0,0,0,.14) 0 1px,transparent 1px 3px)}
-#desk{position:absolute;inset:0 0 40px;padding:12px;display:grid;grid-template-columns:repeat(auto-fill,84px);grid-auto-rows:92px;gap:6px;align-content:start}
+html,body{overscroll-behavior:none}body{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+#desk{position:absolute;inset:0 0 calc(40px + env(safe-area-inset-bottom,0px));padding:12px;display:grid;grid-template-columns:repeat(auto-fill,84px);grid-auto-rows:92px;gap:6px;align-content:start}
 .ic{background:none;border:0;color:var(--hi);font:inherit;text-align:center;cursor:pointer;padding:4px}
 .ic i{display:block;font-style:normal;font-size:34px}
 .ic:hover,.ic:focus-visible{background:rgba(255,79,163,.3);outline:1px dotted var(--mint)}
@@ -28,23 +29,31 @@ textarea{width:100%;font-family:monospace;font-size:14px}
 .big{font-size:60px;color:var(--pink);line-height:1}
 .frame{width:100%;height:200px;border:2px solid var(--ink);background:#fff}
 .msg{padding:2px 0;word-break:break-word}.r-owner{color:var(--pink)}.r-admin{color:#d0541c}.r-mod{color:#1f8f6a}
-#tb{position:absolute;left:0;right:0;bottom:0;height:40px;background:var(--win);border-top:2px solid var(--hi);display:flex;align-items:center;gap:6px;padding:0 6px;z-index:9000}
+#tb{position:absolute;left:0;right:0;bottom:0;height:calc(40px + env(safe-area-inset-bottom,0px));background:var(--win);border-top:2px solid var(--hi);display:flex;align-items:center;gap:6px;padding:0 6px env(safe-area-inset-bottom,0px);z-index:9000}
 #tasks{flex:1;display:flex;gap:4px;overflow:hidden}#tasks button{max-width:140px;overflow:hidden;white-space:nowrap}
-#menu{position:absolute;left:4px;bottom:42px;background:var(--win);border:2px solid;border-color:var(--hi) var(--ink) var(--ink) var(--hi);z-index:9001;display:none;min-width:190px}
+#menu{position:absolute;left:4px;bottom:calc(42px + env(safe-area-inset-bottom,0px));background:var(--win);border:2px solid;border-color:var(--hi) var(--ink) var(--ink) var(--hi);z-index:9001;display:none;min-width:190px}
 #menu.on{display:block}#menu button{display:block;width:100%;text-align:left;border:0;padding:5px 10px}#menu button:hover{background:var(--pink);color:#fff}
 #toast{position:fixed;top:10px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--mint);padding:4px 12px;z-index:10000;display:none}
 #ann{position:absolute;top:0;left:0;right:0;background:var(--pink);color:#fff;padding:4px 10px;z-index:8000;display:none}
 body.noscan::after{display:none}
 #ctx{position:fixed;display:none;z-index:9500;min-width:170px;background:var(--win);border:2px solid;border-color:var(--hi) var(--ink) var(--ink) var(--hi);box-shadow:4px 4px 0 rgba(0,0,0,.4)}
 #ctx.on{display:block}#ctx button{display:block;width:100%;text-align:left;border:0;padding:4px 10px}#ctx button:hover{background:var(--pink);color:#fff}#ctx hr{margin:2px 0;border:0;border-top:1px solid var(--lo)}
-@media(max-width:600px){.w{left:0!important;top:0!important;width:100%!important;height:calc(100% - 40px)!important}}
+@media(max-width:600px){
+ .w{left:0!important;top:env(safe-area-inset-top,0px)!important;width:100%!important;height:calc(100% - 40px - env(safe-area-inset-bottom,0px) - env(safe-area-inset-top,0px))!important;resize:none;box-shadow:none}
+ .tb{padding:6px 8px}.tb button{width:38px;height:30px;font-size:22px}
+ #tasks{overflow-x:auto}#tasks button{flex:0 0 auto;max-width:110px}
+ #tray button{max-width:130px;overflow:hidden;white-space:nowrap}
+ button,select{min-height:32px}input,select,textarea{font-size:16px}
+ #desk{grid-template-columns:repeat(auto-fill,76px);padding-top:calc(12px + env(safe-area-inset-top,0px))}
+ #menu{max-height:60%;overflow:auto}
+}
 @media(prefers-reduced-motion:no-preference){.start{animation:p 1.6s steps(2) infinite}@keyframes p{50%{background:var(--mint)}}}
 </style></head><body>
 <div id="desk"></div><div id="ann"></div><div id="menu"></div><div id="toast"></div><div id="ctx"></div>
 <div id="tb"><button id="start" class="start">Luni's Thing</button><div id="tasks"></div><span id="tray"></span></div>
 <script>
 /* ====== CONFIG: paste your Supabase values (see schema.sql) ====== */
-const CFG={url:'https://cyjyuvrarekwlefxcqui.supabase.co',key:'sb_publishable_E2_jmyi7lsaceSdaVGeQAg_FvsDUTpb'};
+const CFG={url:'',key:''};
 /* ================================================================= */
 const $=s=>document.querySelector(s);
 const h=(t,p,...k)=>{const e=document.createElement(t);for(const x in p||{}){if(x==='on')for(const y in p.on)e.addEventListener(y,p.on[y]);else if(x in e)e[x]=p[x];else e.setAttribute(x,p[x])}k.flat().forEach(c=>e.append(c));return e};
@@ -66,8 +75,8 @@ function win(id,title,icon,fn,wd=440,ht=400){
  const task=h('button',{on:{click:()=>el.classList.contains('hide')||el.style.zIndex==z?el.classList.toggle('hide'):front(w)}},icon+' '+title);
  const x=()=>{w.onclose&&w.onclose();el.remove();task.remove();delete wins[id]};
  const tb=h('div',{className:'tb'},icon+' '+title,h('span',{},h('button',{on:{click:()=>el.classList.add('hide')}},'_'),h('button',{on:{click:x}},'x')));
- const cm=e=>{e.stopPropagation();menu(e,[['Minimize / Restore',()=>task.click()],['Close',x]])};task.oncontextmenu=cm;tb.oncontextmenu=cm;
- tb.onpointerdown=e=>{if(e.target.tagName==='BUTTON')return;front(w);el.classList.add('drag');const ox=e.clientX-el.offsetLeft,oy=e.clientY-el.offsetTop;
+ const cm=e=>{e.stopPropagation();menu(e,[['Minimize / Restore',()=>task.click()],['Close',x]])};task.oncontextmenu=cm;tb.oncontextmenu=cm;lp(task,cm);lp(tb,cm);
+ tb.onpointerdown=e=>{if(e.target.tagName==='BUTTON'||innerWidth<=600)return;front(w);el.classList.add('drag');const ox=e.clientX-el.offsetLeft,oy=e.clientY-el.offsetTop;
   const mv=m=>{el.style.left=Math.max(0,m.clientX-ox)+'px';el.style.top=Math.max(0,m.clientY-oy)+'px'};
   const up=()=>{el.classList.remove('drag');removeEventListener('pointermove',mv);removeEventListener('pointerup',up)};addEventListener('pointermove',mv);addEventListener('pointerup',up)};
  el.onpointerdown=()=>{z++;el.style.zIndex=z};
@@ -213,8 +222,8 @@ function snake(b,w){
   if(q[0]===f[0]&&q[1]===f[1]){n++;f=[Math.random()*N|0,Math.random()*N|0];sc.textContent='Arrow keys or WASD. Score: '+n}else s.pop();
   x.fillStyle='#1a1033';x.fillRect(0,0,320,320);x.fillStyle='#ff4fa3';x.fillRect(f[0]*20,f[1]*20,18,18);x.fillStyle='#6ff2c5';s.forEach(p=>x.fillRect(p[0]*20,p[1]*20,18,18))};
  const K={ArrowUp:[0,-1],w:[0,-1],ArrowDown:[0,1],s:[0,1],ArrowLeft:[-1,0],a:[-1,0],ArrowRight:[1,0],d:[1,0]};
- w.el.tabIndex=0;w.el.onkeydown=e=>{const k=K[e.key];if(k&&(k[0]+d[0]||k[1]+d[1])){d=k;e.preventDefault()}};
- w.onclose=()=>clearInterval(t);b.append(sc,c);start();w.el.focus();
+ const turn=k=>{if(k&&(k[0]+d[0]||k[1]+d[1]))d=k};w.el.tabIndex=0;w.el.onkeydown=e=>{if(K[e.key]){turn(K[e.key]);e.preventDefault()}};
+ w.onclose=()=>clearInterval(t);b.append(sc,c,h('div',{className:'bar',style:'justify-content:center;margin-top:8px'},...[['◀',K.ArrowLeft],['▲',K.ArrowUp],['▼',K.ArrowDown],['▶',K.ArrowRight]].map(([l,k])=>h('button',{style:'font-size:26px;padding:6px 16px',on:{pointerdown:e=>{e.preventDefault();turn(k)}}},l))));start();w.el.focus();
 }
 function term(b){
  const out=h('div',{style:'white-space:pre-wrap'}),inp=h('input',{style:'width:100%;background:#0a0d1a;color:#6ff2c5',placeholder:'type help'});
@@ -237,6 +246,10 @@ async function loadAnn(){const a=$('#ann'),d=$('#desk');a.style.display='none';d
  const r=(await sb.from('announcements').select('*').order('created_at',{ascending:false}).limit(1)).data?.[0];if(!r||store.get('annx')===r.id)return;
  a.replaceChildren('📢 '+r.body+' ',h('button',{on:{click:()=>{store.set('annx',r.id);loadAnn()}}},'dismiss'));a.style.display='block';d.style.top='34px'}
 const APPS=[['weather','Weather','☁',weather],['rss','News','📰',rss],['radio','Radio','📻',radio,360,420],['chat','Global Chat','💬',chat,400,440],['shop','Workshop','🛠',shop,460,520],['builder','App Builder','🧱',builder,500,540],['calc','Calculator','🧮',calc,270,340],['paint','Paint','🎨',paint,430,420],['snake','Snake','🐍',snake,350,400],['term','Terminal','⌨',term,420,300],['notes','Notepad','📝',notes,340,300],['settings','Settings','⚙',settings,340,220],['admin','Admin','🛡',admin,540,480],['about','About','💾',about,340,220],['bin','Recycle Bin','🗑',binApp,380,340]];
+function lp(el,fn){let t,sx,sy;const c=()=>clearTimeout(t);
+ el.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse')return;sx=e.clientX;sy=e.clientY;el._lp=0;const tg=e.target;t=setTimeout(()=>{el._lp=1;fn({clientX:sx,clientY:sy,target:tg,preventDefault(){},stopPropagation(){}})},500)});
+ el.addEventListener('pointermove',e=>{if(Math.abs(e.clientX-sx)>10||Math.abs(e.clientY-sy)>10)c()});el.addEventListener('pointerup',c);el.addEventListener('pointercancel',c);
+ el.addEventListener('click',e=>{if(el._lp){el._lp=0;e.stopImmediatePropagation();e.preventDefault()}},true)}
 const bin=()=>store.get('bin',[]);
 const openApp=id=>{const a=APPS.find(x=>x[0]===id);a&&win(a[0],a[1],a[2],a[3],a[4],a[5])};
 function menu(e,items){e.preventDefault();const m=$('#ctx');
@@ -259,13 +272,14 @@ function desk(){
   ...APPS.filter(a=>(a[0]!=='admin'||staff())&&!hid.includes(a[0])).map(a=>({bin:a[0]==='bin',i:a[2],n:a[0]==='bin'&&B.length?`Recycle Bin (${B.length})`:a[1],f:()=>win(a[0],a[1],a[2],a[3],a[4],a[5]),del:a[0]==='bin'?null:()=>trash({k:'sys',id:a[0],n:a[1],i:a[2]})})),
   ...store.get('apps',[]).map(a=>({i:a.icon,n:a.name,f:()=>runApp(a),del:()=>{store.set('apps',store.get('apps',[]).filter(x=>x.id!==a.id));trash({k:'usr',id:a.id,n:a.name,i:a.icon,app:a})}}))];
  const bi=items.findIndex(x=>x.bin);if(bi>-1)items.push(items.splice(bi,1)[0]);
- items.forEach(x=>{d.append(h('button',{className:'ic',on:{dblclick:x.f,keydown:e=>e.key==='Enter'&&x.f(),click:e=>matchMedia('(pointer:coarse)').matches&&x.f(),contextmenu:e=>{e.stopPropagation();menu(e,[['Open',x.f],...(x.del?[['-'],['Delete',x.del]]:[])])}}},h('i',{},x.i),x.n));
+ items.forEach(x=>{const mi=e=>{e.stopPropagation();menu(e,[['Open',x.f],...(x.del?[['-'],['Delete',x.del]]:[])])};const bt=h('button',{className:'ic',on:{dblclick:x.f,keydown:e=>e.key==='Enter'&&x.f(),click:e=>matchMedia('(pointer:coarse)').matches&&x.f(),contextmenu:mi}},h('i',{},x.i),x.n);lp(bt,mi);d.append(bt);
   m.append(h('button',{on:{click:()=>{x.f();m.classList.remove('on')}}},x.i+' '+x.n))});
 }
-$('#desk').oncontextmenu=e=>menu(e,[['Refresh',()=>{desk();loadAnn()}],['New app...',()=>openApp('builder')],
+const deskMenu=e=>menu(e,[['Refresh',()=>{desk();loadAnn()}],['New app...',()=>openApp('builder')],
  ['Next wallpaper',()=>{const k=Object.keys(WP),t=store.get('set',{wp:'Grape',scan:true});t.wp=k[(k.indexOf(t.wp)+1)%k.length];store.set('set',t);applySettings()}],
  ['Toggle CRT scanlines',()=>{const t=store.get('set',{wp:'Grape',scan:true});t.scan=!t.scan;store.set('set',t);applySettings()}],
  ['-'],['Recycle Bin',()=>openApp('bin')],['Settings',()=>openApp('settings')]]);
+$('#desk').oncontextmenu=deskMenu;lp($('#desk'),e=>e.target.id==='desk'&&deskMenu(e));
 addEventListener('pointerdown',e=>{if(!e.target.closest('#ctx'))$('#ctx').classList.remove('on')},true);
 addEventListener('keydown',e=>e.key==='Escape'&&$('#ctx').classList.remove('on'));
 addEventListener('contextmenu',e=>{if(!e.target.closest('input,textarea'))e.preventDefault()});
