@@ -412,7 +412,7 @@ function vClose(v,uid){
  delete v.peers[uid];v.wants.delete(uid);v.watching.delete(uid)
 }
 function vApply(){const v=VC;if(!v)return;const f=v.forced.has(me.id);v.track.enabled=!(v.self||f);
- if(v.ready)v.ch.track(v.pres());Object.entries(v.peers).forEach(([u,p])=>p.audio.muted=v.forced.has(u));v.ui?.()}
+ if(v.ready)v.ch.track(v.pres());rt();Object.entries(v.peers).forEach(([u,p])=>p.audio.muted=v.forced.has(u));v.ui?.()}
 /* screen share helpers: a viewer only accepts video from people whose role really has the screenshare permission */
 const vOkShare=(v,u)=>{
  const names=v.roleNames?.[u]||[v.prof[u]?.role].filter(Boolean);
@@ -477,13 +477,20 @@ async function vSync(){const v=VC;if(!v)return;
  /* the peer with the larger id makes the offer, so the two sides never collide */
  for(const u of ids)if(!v.peers[u]&&me.id>u){const p=vPeer(u);try{const o=await p.pc.createOffer();await p.pc.setLocalDescription(o);vSend(u,'offer',p.pc.localDescription.toJSON())}catch{}}
  v.ui?.()}
+/* shared roster: everyone logged in tracks {room}; the lobby reads who is in which room */
+let RC=null,RCS={};
+const rpres=()=>VC?Object.assign({room:VC.id},VC.pres()):{room:null};
+const rt=()=>{try{RC?.track(rpres())?.catch?.(()=>{})}catch{}};
+function roster(){if(RC){sb.removeChannel(RC);RC=null}RCS={};if(!sb||!me)return;
+ RC=sb.channel('vcroster',{config:{presence:{key:me.id}}});
+ RC.on('presence',{event:'sync'},()=>{RCS=RC.presenceState();wins.voice?.rdraw?.()}).subscribe(st=>{if(st==='SUBSCRIBED')rt()})}
 function vSpeak(m){const v=VC;
  if(!v||!m||typeof m.text!=='string'||m.from===me.id||!v.hear||!window.speechSynthesis)return;
  /* sender must currently be in the room, text-only, with TTS on, and not force-muted or kicked */
  if(!v.pn[m.from]||!v.pt[m.from]||v.forced.has(m.from)||(v.ignore[m.from]||0)>Date.now())return;
  if(speechSynthesis.pending)return;
  const name=v.prof[m.from]?dn(v.prof[m.from]):'Someone';
- try{speechSynthesis.speak(new SpeechSynthesisUtterance(name+' says: '+m.text.slice(0,300)))}catch{}}
+ try{const u=new SpeechSynthesisUtterance(name+' says: '+m.text.slice(0,300)),z=speechSynthesis.getVoices().find(x=>/zira/i.test(x.name));if(z){u.voice=z;u.lang=z.lang}speechSynthesis.speak(u)}catch{}}
 function vAct(a){const v=VC;if(!v||a.channel_id!==v.id)return;
  if(a.action==='kick'){if(a.target===me.id)return voiceLeave('You were kicked by '+a.actor_login);v.ignore[a.target]=Date.now()+60000;vClose(v,a.target);return vSync()}
  if(a.action==='stopshare'){if(a.target===me.id)shareStop('A moderator stopped your screen share');else{v.blocked.add(a.target);v.ui?.()}return}
@@ -507,7 +514,7 @@ function shareStop(msg){const v=VC;if(!v||!v.share)return;const s=v.share;v.shar
  v.wants.clear();
  Object.values(v.peers).forEach(p=>p.vsender?.replaceTrack(null).catch(()=>{}));
  vApply();if(msg)toast(msg)}
-function voiceLeave(msg){const v=VC;if(!v)return;snd('leave');VC=null;try{speechSynthesis.cancel()}catch{}clearInterval(v.tick);clearInterval(v.xpt);Object.keys(v.peers).forEach(u=>vClose(v,u));
+function voiceLeave(msg){const v=VC;if(!v)return;snd('leave');VC=null;try{speechSynthesis.cancel()}catch{}rt();clearInterval(v.tick);clearInterval(v.xpt);Object.keys(v.peers).forEach(u=>vClose(v,u));
  v.share?.getTracks().forEach(t=>{t.onended=null;t.stop()});
  v.stream.getTracks().forEach(t=>t.stop());try{v.ac.close()}catch{}sb.removeChannel(v.ch);sb.removeChannel(v.act);if(v.cc)sb.removeChannel(v.cc);v.ui?.();tray();if(msg)toast(msg)}
 /* Returning to the tab can resume a browser-suspended AudioContext. Re-track
@@ -539,7 +546,7 @@ async function voiceJoin(c,ui,textOnly){
  v.act=sb.channel('vact-'+c.id).on('postgres_changes',{event:'INSERT',schema:'public',table:'voice_actions',filter:'channel_id=eq.'+c.id},p=>vAct(p.new)).subscribe();
  v.ch=sb.channel('voice-'+c.id,{config:{presence:{key:me.id},broadcast:{self:false}}});
  v.ch.on('presence',{event:'sync'},vSync).on('broadcast',{event:'sig'},({payload})=>vSig(payload)).on('broadcast',{event:'tts'},({payload})=>vSpeak(payload))
-  .subscribe(async st=>{if(st==='SUBSCRIBED'&&v===VC){v.ready=true;await v.ch.track(v.pres())}});
+  .subscribe(async st=>{if(st==='SUBSCRIBED'&&v===VC){v.ready=true;await v.ch.track(v.pres());rt()}});
  const lvl=an=>{const d=new Uint8Array(an.fftSize);an.getByteTimeDomainData(d);let s=0;for(const x of d)s+=(x-128)*(x-128);return Math.sqrt(s/d.length)/128};
  v.tick=setInterval(()=>{const on={};on[me.id]=v.track.enabled&&lvl(v.sa)>.03;
   Object.entries(v.peers).forEach(([u,p])=>on[u]=!v.forced.has(u)&&!!p.an&&lvl(p.an)>.03);
@@ -633,31 +640,27 @@ async function voice(b,w){
    ...stage,...rows,c.el,
    h('p',{style:'opacity:.7;font-size:1.0625rem'},'Voice and screen sharing are peer-to-peer, so it works best with about 6 people or fewer. Screen video is only sent to people who click Watch.'));
   c.list.scrollTop=1e9;if(had)c.inp.focus()};
- let closed=false,obs=[],gen=0;const pc={};
- const stopObs=async()=>{gen++;const o=obs;obs=[];await Promise.all(o.map(c=>sb.removeChannel(c)))};
- /* watch a room's presence without joining it (we never track, so we don't appear in it) */
- const watchRoom=(c,box,my)=>{
-  const ch=sb.channel('voice-'+c.id,{config:{presence:{key:'lobby-'+me.id}}});obs.push(ch);
-  const show=async()=>{const st=ch.presenceState(),ids=Object.keys(st).filter(u=>/^[0-9a-f-]{36}$/i.test(u)),need=ids.filter(u=>!pc[u]);
-   if(need.length)((await sb.from('profiles').select(PCOLS).in('id',need)).data||[]).forEach(p=>pc[p.id]=p);
-   if(my!==gen)return;
-   box.replaceChildren(...(ids.length?ids.map(u=>{const p=pc[u]||{login:'...',role:'user'},s=st[u][0]||{};
-    return h('div',{},h('b',{style:'color:'+rc(p.role)},dn(p)),s.n?' ⌨'+(s.t?' 🔊':''):s.m?' 🔇':'',s.s?' 🖥':'')}):[h('small',{style:'opacity:.6'},'Nobody here')]))};
-  ch.on('presence',{event:'sync'},show).subscribe()};
- const lobby=async()=>{if(closed)return;await stopObs();const my=gen;b.textContent='Loading...';
+ let closed=false;const pc={};let boxes={};
+ const rost=()=>{const m={};Object.entries(RCS).forEach(([u,a])=>{const s=a[a.length-1];if(s&&s.room!=null)(m[s.room]??=[]).push([u,s])});return m};
+ const fillBoxes=async()=>{const m=rost(),need=[...new Set(Object.values(m).flat().map(x=>x[0]))].filter(u=>!pc[u]);
+  if(need.length)((await sb.from('profiles').select(PCOLS).in('id',need)).data||[]).forEach(p=>pc[p.id]=p);
+  Object.entries(boxes).forEach(([id,box])=>{const l=m[id]||[];
+   box.replaceChildren(...(l.length?l.map(([u,s])=>{const p=pc[u]||{login:'...',role:'user'};
+    return h('div',{},h('b',{style:'color:'+rc(p.role)},dn(p)),s.n?' ⌨'+(s.t?' 🔊':''):s.m?' 🔇':'',s.s?' 🖥':'')}):[h('small',{style:'opacity:.6'},'Nobody here')]))})};
+ w.rdraw=()=>{if(!VC&&!closed)fillBoxes()};
+ const lobby=async()=>{if(closed)return;b.textContent='Loading...';
   const d=(await sb.from('voice_channels').select('*').order('id')).data||[];
   const mk=can('create_channels')?h('button',{on:{click:async()=>{const n=(prompt('Voice channel name (a-z, 0-9, -)')||'').trim().toLowerCase();if(!n)return;if(!/^[a-z0-9-]{1,24}$/.test(n))return toast('Use a-z, 0-9 and - (24 max)');
    const{error}=await sb.from('voice_channels').insert({name:n,created_by:me.id});if(error)return toast(error.message);lobby()}}},'+ New voice channel'):'';
-  const boxes=d.map(()=>h('div',{style:'margin:0.1875rem 0 0 1.25rem'},h('small',{style:'opacity:.6'},'Loading...')));
-  /* observers must be closed before joining: they share the room's channel name */
-  const jn=async(c,t)=>{await stopObs();await voiceJoin(c,draw,t);draw()};
+  boxes={};d.forEach(c=>boxes[c.id]=h('div',{style:'margin:0.1875rem 0 0 1.25rem'},h('small',{style:'opacity:.6'},'Loading...')));
+  const jn=async(c,t)=>{await voiceJoin(c,draw,t);draw()};
   b.replaceChildren(h('div',{className:'bar'},mk,h('button',{on:{click:lobby}},'Refresh')),
-   ...(d.length?d.map((c,i)=>h('div',{className:'row'},'🎙 '+c.name+' ',
+   ...(d.length?d.map(c=>h('div',{className:'row'},'🎙 '+c.name+' ',
     h('button',{on:{click:()=>jn(c)}},'Join'),' ',
-    h('button',{title:'Listen and chat without a microphone',on:{click:()=>jn(c,true)}},'Join text-only'),boxes[i])):[h('p',{},'No voice channels yet.'+(can('create_channels')?'':' Ask staff to create one.'))]));
-  if(d.length)setTimeout(()=>{if(closed||VC||my!==gen)return;d.forEach((c,i)=>watchRoom(c,boxes[i],my))},500)};
+    h('button',{title:'Listen and chat without a microphone',on:{click:()=>jn(c,true)}},'Join text-only'),boxes[c.id])):[h('p',{},'No voice channels yet.'+(can('create_channels')?'':' Ask staff to create one.'))]));
+  fillBoxes()};
  const draw=()=>VC?room():lobby();
- w.onclose=()=>{closed=true;voiceLeave();stopObs()};
+ w.onclose=()=>{closed=true;voiceLeave()};
  draw();
 }
 
@@ -929,7 +932,7 @@ async function loadMe(){
   }
 
   curUid=me?.id||null;
-  startNotify();startFx();
+  startNotify();startFx();roster();
   presence();
   desk();
   tray();
