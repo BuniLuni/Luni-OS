@@ -61,7 +61,7 @@ body.noscan::after{display:none}
 const CFG={url:'https://cyjyuvrarekwlefxcqui.supabase.co',key:'sb_publishable_E2_jmyi7lsaceSdaVGeQAg_FvsDUTpb'};
 /* ================================================================= */
 const $=s=>document.querySelector(s);
-const VER={client:'7.3.0(Core)',server:'33.3.0'};
+const VER={client:'7.4.0(Core)',server:'33.3.0'};
 const h=(t,p,...k)=>{const e=document.createElement(t);for(const x in p||{}){if(x==='on')for(const y in p.on)e.addEventListener(y,p.on[y]);else if(x in e)e[x]=p[x];else e.setAttribute(x,p[x])}k.flat().forEach(c=>e.append(c));return e};
 const store={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
 const toast=m=>{const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.display='none',2500)};
@@ -201,19 +201,23 @@ async function chat(b,w){
 const ICE={iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]};
 let VC=null; /* the voice room you're currently in */
 const vSend=(to,type,data)=>VC?.ch.send({type:'broadcast',event:'sig',payload:{from:me.id,to,type,data}});
-function vClose(v,uid){const p=v.peers[uid];if(!p)return;try{p.pc.close()}catch{}p.audio.pause();p.audio.srcObject=null;try{p.src?.disconnect()}catch{}delete v.peers[uid]}
+function vClose(v,uid){const p=v.peers[uid];if(!p)return;try{p.pc.close()}catch{}p.audio.pause();p.audio.srcObject=null;try{p.src?.disconnect()}catch{}delete v.peers[uid];v.wants.delete(uid);v.watching.delete(uid)}
 function vApply(){const v=VC;if(!v)return;const f=v.forced.has(me.id);v.track.enabled=!(v.self||f);
- if(v.ready)v.ch.track({m:v.self||f,s:!!v.share});Object.entries(v.peers).forEach(([u,p])=>p.audio.muted=v.forced.has(u));v.ui?.()}
-/* screen share helpers: a viewer only shows video from people whose role really has the screenshare permission */
+ if(v.ready)v.ch.track(v.pres());Object.entries(v.peers).forEach(([u,p])=>p.audio.muted=v.forced.has(u));v.ui?.()}
+/* screen share helpers: a viewer only accepts video from people whose role really has the screenshare permission */
 const vOkShare=(v,u)=>{const p=v.prof[u];return !!p&&(p.role==='owner'||(R[p.role]?.perms||[]).includes('screenshare'))};
-const vShows=(v,u)=>!!v.ps[u]&&!v.blocked.has(u)&&vOkShare(v,u)&&!!v.peers[u]?.vs;
+const vSharer=(v,u)=>!!v.ps[u]&&!v.blocked.has(u)&&vOkShare(v,u);
 /* renegotiation (perfect negotiation): used when a screen share track is added to a live connection */
 async function vNeg(p){if(!p.live||p.making)return;try{p.making=true;await p.pc.setLocalDescription();vSend(p.uid,'offer',p.pc.localDescription.toJSON())}catch{}finally{p.making=false}}
 function vLive(p){p.live=true;if(p.neg){p.neg=false;vNeg(p)}}
+/* sharer side: send the screen video to ONE viewer (only after they clicked Watch) */
+function vAttach(p,t){const v=VC;if(!v||!t)return;
+ if(p.vsender)p.vsender.replaceTrack(t).catch(()=>{});
+ else{p.vsender=p.pc.addTrack(t,v.share);if(!p.live)p.neg=true}}
 function vPeer(uid){const v=VC;if(v.peers[uid])return v.peers[uid];
  const pc=new RTCPeerConnection(ICE),p={pc,uid,pend:[],audio:new Audio(),an:null,src:null,live:false,making:false,neg:false,polite:me.id<uid,vs:null,vsender:null};v.peers[uid]=p;
  v.stream.getTracks().forEach(t=>pc.addTrack(t,v.stream));
- const vt=v.share?.getVideoTracks()[0];if(vt){p.vsender=pc.addTrack(vt,v.share);p.neg=true}
+ if(v.share&&v.wants.has(uid)){const vt=v.share.getVideoTracks()[0];if(vt){p.vsender=pc.addTrack(vt,v.share);p.neg=true}}
  pc.onnegotiationneeded=()=>vNeg(p);
  pc.onicecandidate=e=>{if(e.candidate)vSend(uid,'ice',e.candidate.toJSON())};
  pc.ontrack=e=>{
@@ -225,7 +229,9 @@ function vPeer(uid){const v=VC;if(v.peers[uid])return v.peers[uid];
 async function vFlush(p){while(p.pend.length)await p.pc.addIceCandidate(p.pend.shift()).catch(()=>{})}
 async function vSig(m){const v=VC;if(!v||m.to!==me.id||(v.ignore[m.from]||0)>Date.now())return;
  try{
-  if(m.type==='offer'){const p=vPeer(m.from),coll=p.making||p.pc.signalingState!=='stable';
+  if(m.type==='watch'){if(!v.share)return;v.wants.add(m.from);const p=v.peers[m.from];if(p)vAttach(p,v.share.getVideoTracks()[0])}
+  else if(m.type==='unwatch'){v.wants.delete(m.from);v.peers[m.from]?.vsender?.replaceTrack(null).catch(()=>{})}
+  else if(m.type==='offer'){const p=vPeer(m.from),coll=p.making||p.pc.signalingState!=='stable';
    if(coll&&!p.polite)return; /* impolite side ignores a colliding offer */
    if(coll)await Promise.all([p.pc.setLocalDescription({type:'rollback'}),p.pc.setRemoteDescription(m.data)]);else await p.pc.setRemoteDescription(m.data);
    await vFlush(p);await p.pc.setLocalDescription();vSend(m.from,'answer',p.pc.localDescription.toJSON());vLive(p)}
@@ -234,8 +240,9 @@ async function vSig(m){const v=VC;if(!v||m.to!==me.id||(v.ignore[m.from]||0)>Dat
  }catch{}}
 async function vSync(){const v=VC;if(!v)return;
  const st=v.ch.presenceState(),ids=Object.keys(st).filter(u=>u!==me.id&&!((v.ignore[u]||0)>Date.now()));
- v.pm={};v.ps={};ids.forEach(u=>{v.pm[u]=!!st[u][0]?.m;v.ps[u]=!!st[u][0]?.s});
+ v.pm={};v.ps={};v.pn={};ids.forEach(u=>{v.pm[u]=!!st[u][0]?.m;v.ps[u]=!!st[u][0]?.s;v.pn[u]=!!st[u][0]?.n});
  v.blocked.forEach(u=>{if(!v.ps[u])v.blocked.delete(u)}); /* a stopped sharer gets a clean slate */
+ v.watching.forEach(u=>{if(!v.ps[u])v.watching.delete(u)}); /* stop "watching" anyone who stopped sharing */
  Object.keys(v.peers).forEach(u=>{if(!ids.includes(u))vClose(v,u)});
  Object.keys(v.vels).forEach(u=>{if(!v.peers[u]){v.vels[u].srcObject=null;delete v.vels[u]}});
  const need=ids.filter(u=>!v.prof[u]);
@@ -255,31 +262,33 @@ async function shareStart(){const v=VC;if(!v||v.share)return;
  let s;try{s=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:30}},audio:false})}catch{return}
  const kill=()=>s.getTracks().forEach(t=>{t.onended=null;t.stop()});
  if(v!==VC)return kill();
- /* server-side check of the screenshare permission (done after the picker so the browser keeps the click permission) */
  const ok=(await sb.rpc('can_screenshare')).data;
  if(v!==VC)return kill();
  if(!ok){kill();return toast('You do not have permission to share your screen')}
  const t=s.getVideoTracks()[0];try{t.contentHint='detail'}catch{}
  v.share=s;t.onended=()=>shareStop();
- Object.values(v.peers).forEach(p=>{
-  if(p.vsender)p.vsender.replaceTrack(t).catch(()=>{});
-  else{p.vsender=p.pc.addTrack(t,s);if(!p.live)p.neg=true}});
+ /* nothing is sent yet: video only goes to people who click Watch */
  vApply()}
 function shareStop(msg){const v=VC;if(!v||!v.share)return;const s=v.share;v.share=null;
  s.getTracks().forEach(t=>{t.onended=null;t.stop()});
+ v.wants.clear();
  Object.values(v.peers).forEach(p=>p.vsender?.replaceTrack(null).catch(()=>{}));
  vApply();if(msg)toast(msg)}
 function voiceLeave(msg){const v=VC;if(!v)return;VC=null;clearInterval(v.tick);Object.keys(v.peers).forEach(u=>vClose(v,u));
  v.share?.getTracks().forEach(t=>{t.onended=null;t.stop()});
- v.stream.getTracks().forEach(t=>t.stop());try{v.ac.close()}catch{}sb.removeChannel(v.ch);sb.removeChannel(v.act);v.ui?.();tray();if(msg)toast(msg)}
-async function voiceJoin(c,ui){
+ v.stream.getTracks().forEach(t=>t.stop());try{v.ac.close()}catch{}sb.removeChannel(v.ch);sb.removeChannel(v.act);if(v.cc)sb.removeChannel(v.cc);v.ui?.();tray();if(msg)toast(msg)}
+async function voiceJoin(c,ui,textOnly){
  voiceLeave();
- if(!navigator.mediaDevices?.getUserMedia)return toast('Microphone needs HTTPS');
  if((await sb.rpc('vc_kicked',{cid:c.id})).data)return toast('You were kicked. Try again in a minute.');
- let stream;try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}})}catch{return toast('Microphone blocked or missing')}
  const ac=new(window.AudioContext||window.webkitAudioContext)();ac.resume?.();
+ /* no mic (or text-only chosen): send a silent stream so you can still hear everyone and chat */
+ let stream,nomic=false;
+ try{if(textOnly||!navigator.mediaDevices?.getUserMedia)throw 0;
+  stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}})}
+ catch{nomic=true;stream=ac.createMediaStreamDestination().stream;if(!textOnly)toast('No microphone available, joined in text-only mode')}
  const sa=ac.createAnalyser();sa.fftSize=512;ac.createMediaStreamSource(stream).connect(sa);
- const v=VC={id:c.id,name:c.name,stream,track:stream.getAudioTracks()[0],ac,sa,peers:{},forced:new Set(),ignore:{},pm:{},ps:{},blocked:new Set(),vels:{},share:null,prof:{[me.id]:me},self:false,ready:false,ui};
+ const v=VC={id:c.id,name:c.name,stream,track:stream.getAudioTracks()[0],ac,sa,peers:{},forced:new Set(),ignore:{},pm:{},ps:{},pn:{},blocked:new Set(),wants:new Set(),watching:new Set(),vels:{},share:null,prof:{[me.id]:me},self:false,ready:false,ui,nomic,chat:null,cc:null};
+ v.pres=()=>({m:v.self||v.forced.has(me.id)||v.nomic,s:!!v.share,n:v.nomic});
  /* who is force-muted right now: latest mute/unmute per person */
  const acts=(await sb.from('voice_actions').select('target,action').eq('channel_id',c.id).in('action',['mute','unmute']).order('created_at',{ascending:false}).limit(300)).data||[],seen=new Set();
  acts.forEach(a=>{if(seen.has(a.target))return;seen.add(a.target);if(a.action==='mute')v.forced.add(a.target)});
@@ -288,12 +297,35 @@ async function voiceJoin(c,ui){
  v.act=sb.channel('vact-'+c.id).on('postgres_changes',{event:'INSERT',schema:'public',table:'voice_actions',filter:'channel_id=eq.'+c.id},p=>vAct(p.new)).subscribe();
  v.ch=sb.channel('voice-'+c.id,{config:{presence:{key:me.id},broadcast:{self:false}}});
  v.ch.on('presence',{event:'sync'},vSync).on('broadcast',{event:'sig'},({payload})=>vSig(payload))
-  .subscribe(async st=>{if(st==='SUBSCRIBED'&&v===VC){v.ready=true;await v.ch.track({m:v.forced.has(me.id),s:false})}});
+  .subscribe(async st=>{if(st==='SUBSCRIBED'&&v===VC){v.ready=true;await v.ch.track(v.pres())}});
  const lvl=an=>{const d=new Uint8Array(an.fftSize);an.getByteTimeDomainData(d);let s=0;for(const x of d)s+=(x-128)*(x-128);return Math.sqrt(s/d.length)/128};
  v.tick=setInterval(()=>{const on={};on[me.id]=v.track.enabled&&lvl(v.sa)>.03;
   Object.entries(v.peers).forEach(([u,p])=>on[u]=!v.forced.has(u)&&!!p.an&&lvl(p.an)>.03);
   document.querySelectorAll('[data-vu]').forEach(e=>e.style.background=on[e.dataset.vu]?'var(--mint)':'#888')},150);
  tray();ui?.()}
+
+/* text chat inside a voice room (persistent element so redraws don't wipe it) */
+function vchat(v){if(v.chat)return v.chat;
+ const ok=can('chat'),
+  list=h('div',{style:'height:140px;overflow:auto;background:#fff;border:2px solid;border-color:var(--lo) var(--hi) var(--hi) var(--lo);padding:3px'}),
+  inp=h('input',{maxLength:500,disabled:!ok,placeholder:ok?'Message #'+v.name:'You cannot chat',style:'flex:1'});
+ const add=async m=>{if(VC!==v||list.querySelector('#vm'+m.id))return;
+  if(!v.prof[m.user_id]){const{data}=await sb.from('profiles').select(PCOLS).eq('id',m.user_id).maybeSingle();if(data)v.prof[m.user_id]=data}
+  if(VC!==v||list.querySelector('#vm'+m.id))return;
+  const p=v.prof[m.user_id]||{login:'?',role:'user'},
+   r=h('div',{className:'msg',id:'vm'+m.id},h('b',{style:'color:'+rc(p.role)},dn(p)),': '+m.body);
+  if(me&&(me.id===m.user_id||can('delete_messages')))r.append(' ',h('button',{on:{click:()=>sb.from('voice_messages').delete().eq('id',m.id)}},'x'));
+  list.append(r);list.scrollTop=1e9};
+ const send=async()=>{const body=inp.value.trim();if(!body)return;inp.value='';
+  const{error}=await sb.from('voice_messages').insert({channel_id:v.id,body});if(error)toast(error.message)};
+ inp.onkeydown=e=>{if(e.key==='Enter')send()};
+ v.cc=sb.channel('vchat-'+v.id)
+  .on('postgres_changes',{event:'INSERT',schema:'public',table:'voice_messages',filter:'channel_id=eq.'+v.id},p=>add(p.new))
+  .on('postgres_changes',{event:'DELETE',schema:'public',table:'voice_messages'},p=>list.querySelector('#vm'+p.old.id)?.remove())
+  .subscribe();
+ (async()=>{const d=(await sb.from('voice_messages').select('*').eq('channel_id',v.id).order('created_at',{ascending:false}).limit(50)).data||[];for(const m of d.reverse())await add(m)})();
+ return v.chat={el:h('div',{style:'margin-top:8px'},h('div',{},'💬 Voice chat'),list,h('div',{className:'bar',style:'margin:4px 0 0'},inp)),list,inp}}
+
 async function voice(b,w){
  if(!sb)return noBack(b);if(!me)return needLogin(b);
  if(!window.RTCPeerConnection)return b.append('This browser does not support voice.');
@@ -304,27 +336,37 @@ async function voice(b,w){
   if(!e){e=v.vels[u]=h('video',{autoplay:true,muted:true,playsInline:true,title:'Click for fullscreen',style:'width:100%;max-height:300px;background:#000;border:2px solid var(--ink);display:block;cursor:zoom-in'});
    e.onclick=()=>{(e.requestFullscreen||e.webkitRequestFullscreen)?.call(e)}}
   if(e.srcObject!==stream)e.srcObject=stream;e.play().catch(()=>{});return e};
+ const watch=u=>{VC.watching.add(u);vSend(u,'watch',1);VC.ui?.()};
+ const unwatch=u=>{VC.watching.delete(u);vSend(u,'unwatch',1);const e=VC.vels[u];if(e){e.srcObject=null;delete VC.vels[u]}VC.ui?.()};
  const room=()=>{const v=VC,ids=[me.id,...Object.keys(v.pm).filter(u=>!((v.ignore[u]||0)>Date.now()))];
-  const stage=ids.filter(u=>u!==me.id&&vShows(v,u)).map(u=>h('div',{style:'margin-bottom:8px'},h('div',{},'🖥 '+dn(v.prof[u])+"'s screen"),vel(v,u,v.peers[u].vs)));
-  const rows=ids.map(u=>{const p=v.prof[u]||{id:u,login:'...',role:'user'},fm=v.forced.has(u),sm=u===me.id?v.self:v.pm[u],
+  const stage=ids.filter(u=>u!==me.id&&vSharer(v,u)).map(u=>{const nm=dn(v.prof[u]);
+   if(!v.watching.has(u))return h('div',{className:'row'},'🖥 '+nm+' is sharing their screen ',h('button',{on:{click:()=>watch(u)}},'Watch'));
+   return h('div',{style:'margin-bottom:8px'},
+    h('div',{className:'bar',style:'margin:0 0 3px'},h('b',{style:'flex:1'},'🖥 '+nm+"'s screen"),h('button',{on:{click:()=>unwatch(u)}},'Stop watching')),
+    v.peers[u]?.vs?vel(v,u,v.peers[u].vs):h('div',{},'Connecting...'))});
+  const rows=ids.map(u=>{const p=v.prof[u]||{id:u,login:'...',role:'user'},fm=v.forced.has(u),sm=u===me.id?v.self:v.pm[u],tx=u===me.id?v.nomic:v.pn[u],
     mod=can('voice_mod')&&u!==me.id&&(R[p.role]?.pos??-1)>mypos(),sh=u===me.id?!!v.share:!!v.ps[u]&&!v.blocked.has(u);
    return h('div',{className:'row'},h('span',{'data-vu':u,style:'display:inline-block;width:10px;height:10px;border-radius:50%;background:#888;border:1px solid var(--ink);margin-right:6px'}),
     av(p)?h('img',{src:av(p),width:20,height:20,style:'vertical-align:middle;margin-right:5px;object-fit:cover'}):'',
     h('b',{style:'color:'+rc(p.role)+';cursor:pointer',on:{click:()=>p.id&&openProfile(p)}},dn(p)+(u===me.id?' (you)':'')),badge(p.role),
-    fm?' 🔇 muted by mod':sm?' 🔇 mic off':'',sh?' 🖥 sharing':'',
+    tx?' ⌨ text only':fm?' 🔇 muted by mod':sm?' 🔇 mic off':'',sh?' 🖥 sharing':'',
     mod?h('div',{style:'margin-top:3px'},h('button',{on:{click:()=>modAct(u,fm?'unmute':'mute')}},fm?'Unmute':'Force mute'),' ',sh?h('button',{on:{click:()=>modAct(u,'stopshare')}},'Stop share'):'',sh?' ':'',h('button',{on:{click:()=>{if(confirm('Kick '+dn(p)+' from #'+v.name+'?'))modAct(u,'kick')}}},'Kick')):'')});
   const canShare=can('screenshare')&&!!navigator.mediaDevices?.getDisplayMedia;
+  const c=vchat(v),had=document.activeElement===c.inp;
   b.replaceChildren(h('div',{className:'bar'},h('b',{style:'flex:1'},'🎙 #'+v.name),
    canShare?h('button',{on:{click:()=>v.share?shareStop():shareStart()}},v.share?'Stop sharing':'Share screen'):'',
-   h('button',{disabled:v.forced.has(me.id),on:{click:()=>{v.self=!v.self;vApply()}}},v.self?'Unmute mic':'Mute mic'),h('button',{on:{click:()=>voiceLeave()}},'Leave')),
-   v.forced.has(me.id)?h('p',{},'A moderator has muted you in this channel.'):'',...stage,...rows,
-   h('p',{style:'opacity:.7;font-size:17px'},'Voice and screen sharing are peer-to-peer, so it works best with about 6 people or fewer. A sharer sends video to every viewer.'))};
+   v.nomic?'':h('button',{disabled:v.forced.has(me.id),on:{click:()=>{v.self=!v.self;vApply()}}},v.self?'Unmute mic':'Mute mic'),h('button',{on:{click:()=>voiceLeave()}},'Leave')),
+   v.forced.has(me.id)?h('p',{},'A moderator has muted you in this channel.'):'',...stage,...rows,c.el,
+   h('p',{style:'opacity:.7;font-size:17px'},'Voice and screen sharing are peer-to-peer, so it works best with about 6 people or fewer. Screen video is only sent to people who click Watch.'));
+  c.list.scrollTop=1e9;if(had)c.inp.focus()};
  const lobby=async()=>{b.textContent='Loading...';
   const d=(await sb.from('voice_channels').select('*').order('id')).data||[];
   const mk=can('create_channels')?h('button',{on:{click:async()=>{const n=(prompt('Voice channel name (a-z, 0-9, -)')||'').trim().toLowerCase();if(!n)return;if(!/^[a-z0-9-]{1,24}$/.test(n))return toast('Use a-z, 0-9 and - (24 max)');
    const{error}=await sb.from('voice_channels').insert({name:n,created_by:me.id});if(error)return toast(error.message);lobby()}}},'+ New voice channel'):'';
   b.replaceChildren(h('div',{className:'bar'},mk,h('button',{on:{click:lobby}},'Refresh')),
-   ...(d.length?d.map(c=>h('div',{className:'row'},'🎙 '+c.name+' ',h('button',{on:{click:async()=>{await voiceJoin(c,draw);draw()}}},'Join'))):[h('p',{},'No voice channels yet.'+(can('create_channels')?'':' Ask staff to create one.'))]))};
+   ...(d.length?d.map(c=>h('div',{className:'row'},'🎙 '+c.name+' ',
+    h('button',{on:{click:async()=>{await voiceJoin(c,draw);draw()}}},'Join'),' ',
+    h('button',{title:'Listen and chat without a microphone',on:{click:async()=>{await voiceJoin(c,draw,true);draw()}}},'Join text-only'))):[h('p',{},'No voice channels yet.'+(can('create_channels')?'':' Ask staff to create one.'))]))};
  const draw=()=>VC?room():lobby();
  w.onclose=()=>voiceLeave();
  draw();
