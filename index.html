@@ -379,7 +379,7 @@ async function dmApp(b,w){
   tray()};
  const open=async u=>{cur=u.id;P[u.id]=u;const msgs=h('div',{style:'flex:1;overflow:auto;background:#fff;border:2px solid;border-color:var(--lo) var(--hi) var(--hi) var(--lo);padding:3px'}),inp=h('input',{maxLength:1000,placeholder:'Message '+dn(u),style:'flex:1'});
   const send=async()=>{const body=inp.value.trim();if(!body)return;inp.value='';const{data,error}=await sb.from('dms').insert({sender_id:me.id,recipient_id:u.id,body}).select().single();if(error)return toast(error.message);msgs.append(bubble(data));msgs.scrollTop=1e9;last[u.id]=data};
-  inp.onkeydown=e=>e.key==='Enter'&&send();
+  inp.onkeydown=e=>{if(e.key==='Enter')send()};
   pane.replaceChildren(h('div',{className:'bar'},h('b',{style:'color:'+rc(u.role)+';cursor:pointer',on:{click:()=>openProfile(u)}},dn(u)),badge(u.role)),msgs,h('div',{className:'bar',style:'margin:4px 0 0'},inp,h('button',{on:{click:send}},'Send')));
   w.append=m=>{if(m.id&&msgs.querySelector('#d'+m.id))return;msgs.append(bubble(m));msgs.scrollTop=1e9};
   ((await sb.from('dms').select('*').or(`and(sender_id.eq.${me.id},recipient_id.eq.${u.id}),and(sender_id.eq.${u.id},recipient_id.eq.${me.id})`).order('created_at',{ascending:false}).limit(60)).data||[]).reverse().forEach(m=>msgs.append(bubble(m)));msgs.scrollTop=1e9;inp.focus();
