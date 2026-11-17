@@ -327,24 +327,51 @@ async function voiceJoin(c,ui,textOnly){
 
 /* text chat inside a voice room (persistent element so redraws don't wipe it) */
 function vchat(v){if(v.chat)return v.chat;
- const ok=can('chat'),
+ const ok=can('chat'),pendingEcho=new Map(),suppressEcho=new Map(),
   list=h('div',{style:'height:140px;overflow:auto;background:#fff;border:2px solid;border-color:var(--lo) var(--hi) var(--hi) var(--lo);padding:3px'}),
   inp=h('input',{maxLength:500,disabled:!ok,placeholder:ok?'Message #'+v.name:'You cannot chat',style:'flex:1'});
- const add=async m=>{if(VC!==v||list.querySelector('#vm'+m.id))return;
-  if(!v.prof[m.user_id]){const{data}=await sb.from('profiles').select(PCOLS).eq('id',m.user_id).maybeSingle();if(data)v.prof[m.user_id]=data}
-  if(VC!==v||list.querySelector('#vm'+m.id))return;
-  const p=v.prof[m.user_id]||{login:'?',role:'user'},
+ const bump=(map,key,delta)=>{const n=(map.get(key)||0)+delta;if(n>0)map.set(key,n);else map.delete(key)};
+ const add=async(m)=>{
+  if(VC!==v||list.querySelector('#vm'+CSS.escape(String(m.id))))return;
+  /* Ignore the Realtime echo if this message was already shown optimistically. */
+  if(m.user_id===me.id){
+   if((pendingEcho.get(m.body)||0)>0){bump(pendingEcho,m.body,-1);return}
+   if((suppressEcho.get(m.body)||0)>0){bump(suppressEcho,m.body,-1);return}
+  }
+  if(m.user_id&&!v.prof[m.user_id]){
+   const{data,error}=await sb.from('profiles').select(PCOLS).eq('id',m.user_id).maybeSingle();
+   if(data)v.prof[m.user_id]=data;
+   else if(error)console.warn('Voice chat profile lookup failed:',error.message);
+  }
+  if(VC!==v||list.querySelector('#vm'+CSS.escape(String(m.id))))return;
+  const p=v.prof[m.user_id]||{login:m.user_id===me.id?me.login:'?',role:m.user_id===me.id?me.role:'user'},
    r=h('div',{className:'msg',id:'vm'+m.id},h('b',{style:'color:'+rc(p.role)},dn(p)),': '+m.body);
-  if(me&&(me.id===m.user_id||can('delete_messages')))r.append(' ',h('button',{on:{click:()=>sb.from('voice_messages').delete().eq('id',m.id)}},'x'));
-  list.append(r);list.scrollTop=1e9};
- const send=async()=>{const body=inp.value.trim();if(!body)return;inp.value='';
-  const{error}=await sb.from('voice_messages').insert({channel_id:v.id,user_id:me.id,body});if(error)toast(error.message)};
+  if(me&&(me.id===m.user_id||can('delete_messages'))&&!String(m.id).startsWith('local-'))
+   r.append(' ',h('button',{on:{click:async()=>{const{error}=await sb.from('voice_messages').delete().eq('id',m.id);if(error)toast(error.message);else r.remove()}}},'x'));
+  list.append(r);list.scrollTop=list.scrollHeight;
+ };
+ const send=async()=>{
+  const body=inp.value.trim();if(!body)return;
+  if(!me)return toast('Log in to send voice chat messages.');
+  inp.value='';bump(pendingEcho,body,1);
+  const{error}=await sb.from('voice_messages').insert({channel_id:v.id,user_id:me.id,body});
+  if(error){bump(pendingEcho,body,-1);inp.value=body;return toast('Voice chat send failed: '+error.message)}
+  /* Show the sender's message immediately, even if Realtime is unavailable. */
+  if((pendingEcho.get(body)||0)>0){
+   bump(pendingEcho,body,-1);bump(suppressEcho,body,1);
+   await add({id:'local-'+Date.now()+'-'+Math.random().toString(36).slice(2),channel_id:v.id,user_id:me.id,body});
+  }
+ };
  inp.onkeydown=e=>{if(e.key==='Enter')send()};
  v.cc=sb.channel('vchat-'+v.id)
   .on('postgres_changes',{event:'INSERT',schema:'public',table:'voice_messages',filter:'channel_id=eq.'+v.id},p=>add(p.new))
-  .on('postgres_changes',{event:'DELETE',schema:'public',table:'voice_messages'},p=>list.querySelector('#vm'+p.old.id)?.remove())
-  .subscribe();
- (async()=>{const d=(await sb.from('voice_messages').select('*').eq('channel_id',v.id).order('created_at',{ascending:false}).limit(50)).data||[];for(const m of d.reverse())await add(m)})();
+  .on('postgres_changes',{event:'DELETE',schema:'public',table:'voice_messages'},p=>list.querySelector('#vm'+CSS.escape(String(p.old.id)))?.remove())
+  .subscribe((status,error)=>{if(status==='CHANNEL_ERROR'||status==='TIMED_OUT')console.warn('Voice chat Realtime subscription:',status,error||'')});
+ (async()=>{
+  const{data,error}=await sb.from('voice_messages').select('*').eq('channel_id',v.id).order('created_at',{ascending:false}).limit(50);
+  if(error){console.error('Voice chat history could not be loaded:',error);toast('Voice chat history blocked: '+error.message);return}
+  for(const m of (data||[]).reverse())await add(m);
+ })();
  return v.chat={el:h('div',{style:'margin-top:8px'},h('div',{},'💬 Voice chat'),list,h('div',{className:'bar',style:'margin:4px 0 0'},inp)),list,inp}}
 
 async function voice(b,w){
