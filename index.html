@@ -61,7 +61,7 @@ body.noscan::after{display:none}
 const CFG={url:'https://cyjyuvrarekwlefxcqui.supabase.co',key:'sb_publishable_E2_jmyi7lsaceSdaVGeQAg_FvsDUTpb'};
 /* ================================================================= */
 const $=s=>document.querySelector(s);
-const VER={client:'7.2.9(Core)',server:'33.2.9'};
+const VER={client:'7.3.0(Core)',server:'33.3.0'};
 const h=(t,p,...k)=>{const e=document.createElement(t);for(const x in p||{}){if(x==='on')for(const y in p.on)e.addEventListener(y,p.on[y]);else if(x in e)e[x]=p[x];else e.setAttribute(x,p[x])}k.flat().forEach(c=>e.append(c));return e};
 const store={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
 const toast=m=>{const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.display='none',2500)};
@@ -203,26 +203,41 @@ let VC=null; /* the voice room you're currently in */
 const vSend=(to,type,data)=>VC?.ch.send({type:'broadcast',event:'sig',payload:{from:me.id,to,type,data}});
 function vClose(v,uid){const p=v.peers[uid];if(!p)return;try{p.pc.close()}catch{}p.audio.pause();p.audio.srcObject=null;try{p.src?.disconnect()}catch{}delete v.peers[uid]}
 function vApply(){const v=VC;if(!v)return;const f=v.forced.has(me.id);v.track.enabled=!(v.self||f);
- if(v.ready)v.ch.track({m:v.self||f});Object.entries(v.peers).forEach(([u,p])=>p.audio.muted=v.forced.has(u));v.ui?.()}
+ if(v.ready)v.ch.track({m:v.self||f,s:!!v.share});Object.entries(v.peers).forEach(([u,p])=>p.audio.muted=v.forced.has(u));v.ui?.()}
+/* screen share helpers: a viewer only shows video from people whose role really has the screenshare permission */
+const vOkShare=(v,u)=>{const p=v.prof[u];return !!p&&(p.role==='owner'||(R[p.role]?.perms||[]).includes('screenshare'))};
+const vShows=(v,u)=>!!v.ps[u]&&!v.blocked.has(u)&&vOkShare(v,u)&&!!v.peers[u]?.vs;
+/* renegotiation (perfect negotiation): used when a screen share track is added to a live connection */
+async function vNeg(p){if(!p.live||p.making)return;try{p.making=true;await p.pc.setLocalDescription();vSend(p.uid,'offer',p.pc.localDescription.toJSON())}catch{}finally{p.making=false}}
+function vLive(p){p.live=true;if(p.neg){p.neg=false;vNeg(p)}}
 function vPeer(uid){const v=VC;if(v.peers[uid])return v.peers[uid];
- const pc=new RTCPeerConnection(ICE),p={pc,pend:[],audio:new Audio(),an:null,src:null};v.peers[uid]=p;
+ const pc=new RTCPeerConnection(ICE),p={pc,uid,pend:[],audio:new Audio(),an:null,src:null,live:false,making:false,neg:false,polite:me.id<uid,vs:null,vsender:null};v.peers[uid]=p;
  v.stream.getTracks().forEach(t=>pc.addTrack(t,v.stream));
+ const vt=v.share?.getVideoTracks()[0];if(vt){p.vsender=pc.addTrack(vt,v.share);p.neg=true}
+ pc.onnegotiationneeded=()=>vNeg(p);
  pc.onicecandidate=e=>{if(e.candidate)vSend(uid,'ice',e.candidate.toJSON())};
- pc.ontrack=e=>{const s=e.streams[0];p.audio.srcObject=s;p.audio.muted=v.forced.has(uid);p.audio.play().catch(()=>{});
+ pc.ontrack=e=>{
+  if(e.track.kind==='video'){p.vs=new MediaStream([e.track]);e.track.onunmute=e.track.onmute=()=>v.ui?.();v.ui?.();return}
+  const s=e.streams[0];p.audio.srcObject=s;p.audio.muted=v.forced.has(uid);p.audio.play().catch(()=>{});
   if(!p.an){p.src=v.ac.createMediaStreamSource(s);p.an=v.ac.createAnalyser();p.an.fftSize=512;p.src.connect(p.an)}};
  pc.onconnectionstatechange=()=>{if(pc.connectionState==='failed')toast('Could not connect to '+(v.prof[uid]?dn(v.prof[uid]):'someone')+' (their network may block voice)')};
  return p}
 async function vFlush(p){while(p.pend.length)await p.pc.addIceCandidate(p.pend.shift()).catch(()=>{})}
 async function vSig(m){const v=VC;if(!v||m.to!==me.id||(v.ignore[m.from]||0)>Date.now())return;
  try{
-  if(m.type==='offer'){const p=vPeer(m.from);await p.pc.setRemoteDescription(m.data);await vFlush(p);const a=await p.pc.createAnswer();await p.pc.setLocalDescription(a);vSend(m.from,'answer',p.pc.localDescription.toJSON())}
-  else if(m.type==='answer'){const p=v.peers[m.from];if(!p)return;await p.pc.setRemoteDescription(m.data);await vFlush(p)}
+  if(m.type==='offer'){const p=vPeer(m.from),coll=p.making||p.pc.signalingState!=='stable';
+   if(coll&&!p.polite)return; /* impolite side ignores a colliding offer */
+   if(coll)await Promise.all([p.pc.setLocalDescription({type:'rollback'}),p.pc.setRemoteDescription(m.data)]);else await p.pc.setRemoteDescription(m.data);
+   await vFlush(p);await p.pc.setLocalDescription();vSend(m.from,'answer',p.pc.localDescription.toJSON());vLive(p)}
+  else if(m.type==='answer'){const p=v.peers[m.from];if(!p)return;await p.pc.setRemoteDescription(m.data);await vFlush(p);vLive(p)}
   else if(m.type==='ice'){const p=v.peers[m.from]||vPeer(m.from);if(p.pc.remoteDescription)await p.pc.addIceCandidate(m.data).catch(()=>{});else p.pend.push(m.data)}
  }catch{}}
 async function vSync(){const v=VC;if(!v)return;
  const st=v.ch.presenceState(),ids=Object.keys(st).filter(u=>u!==me.id&&!((v.ignore[u]||0)>Date.now()));
- v.pm={};ids.forEach(u=>v.pm[u]=!!st[u][0]?.m);
+ v.pm={};v.ps={};ids.forEach(u=>{v.pm[u]=!!st[u][0]?.m;v.ps[u]=!!st[u][0]?.s});
+ v.blocked.forEach(u=>{if(!v.ps[u])v.blocked.delete(u)}); /* a stopped sharer gets a clean slate */
  Object.keys(v.peers).forEach(u=>{if(!ids.includes(u))vClose(v,u)});
+ Object.keys(v.vels).forEach(u=>{if(!v.peers[u]){v.vels[u].srcObject=null;delete v.vels[u]}});
  const need=ids.filter(u=>!v.prof[u]);
  if(need.length)((await sb.from('profiles').select(PCOLS).in('id',need)).data||[]).forEach(p=>v.prof[p.id]=p);
  if(v!==VC)return;
@@ -231,10 +246,31 @@ async function vSync(){const v=VC;if(!v)return;
  v.ui?.()}
 function vAct(a){const v=VC;if(!v||a.channel_id!==v.id)return;
  if(a.action==='kick'){if(a.target===me.id)return voiceLeave('You were kicked by '+a.actor_login);v.ignore[a.target]=Date.now()+60000;vClose(v,a.target);return vSync()}
+ if(a.action==='stopshare'){if(a.target===me.id)shareStop('A moderator stopped your screen share');else{v.blocked.add(a.target);v.ui?.()}return}
  if(a.action==='mute')v.forced.add(a.target);else v.forced.delete(a.target);
  if(a.target===me.id)toast(a.action==='mute'?'A moderator muted you':'You were unmuted');
  vApply()}
+async function shareStart(){const v=VC;if(!v||v.share)return;
+ if(!navigator.mediaDevices?.getDisplayMedia)return toast('This browser cannot share screens');
+ let s;try{s=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:30}},audio:false})}catch{return}
+ const kill=()=>s.getTracks().forEach(t=>{t.onended=null;t.stop()});
+ if(v!==VC)return kill();
+ /* server-side check of the screenshare permission (done after the picker so the browser keeps the click permission) */
+ const ok=(await sb.rpc('can_screenshare')).data;
+ if(v!==VC)return kill();
+ if(!ok){kill();return toast('You do not have permission to share your screen')}
+ const t=s.getVideoTracks()[0];try{t.contentHint='detail'}catch{}
+ v.share=s;t.onended=()=>shareStop();
+ Object.values(v.peers).forEach(p=>{
+  if(p.vsender)p.vsender.replaceTrack(t).catch(()=>{});
+  else{p.vsender=p.pc.addTrack(t,s);if(!p.live)p.neg=true}});
+ vApply()}
+function shareStop(msg){const v=VC;if(!v||!v.share)return;const s=v.share;v.share=null;
+ s.getTracks().forEach(t=>{t.onended=null;t.stop()});
+ Object.values(v.peers).forEach(p=>p.vsender?.replaceTrack(null).catch(()=>{}));
+ vApply();if(msg)toast(msg)}
 function voiceLeave(msg){const v=VC;if(!v)return;VC=null;clearInterval(v.tick);Object.keys(v.peers).forEach(u=>vClose(v,u));
+ v.share?.getTracks().forEach(t=>{t.onended=null;t.stop()});
  v.stream.getTracks().forEach(t=>t.stop());try{v.ac.close()}catch{}sb.removeChannel(v.ch);sb.removeChannel(v.act);v.ui?.();tray();if(msg)toast(msg)}
 async function voiceJoin(c,ui){
  voiceLeave();
@@ -243,7 +279,7 @@ async function voiceJoin(c,ui){
  let stream;try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}})}catch{return toast('Microphone blocked or missing')}
  const ac=new(window.AudioContext||window.webkitAudioContext)();ac.resume?.();
  const sa=ac.createAnalyser();sa.fftSize=512;ac.createMediaStreamSource(stream).connect(sa);
- const v=VC={id:c.id,name:c.name,stream,track:stream.getAudioTracks()[0],ac,sa,peers:{},forced:new Set(),ignore:{},pm:{},prof:{[me.id]:me},self:false,ready:false,ui};
+ const v=VC={id:c.id,name:c.name,stream,track:stream.getAudioTracks()[0],ac,sa,peers:{},forced:new Set(),ignore:{},pm:{},ps:{},blocked:new Set(),vels:{},share:null,prof:{[me.id]:me},self:false,ready:false,ui};
  /* who is force-muted right now: latest mute/unmute per person */
  const acts=(await sb.from('voice_actions').select('target,action').eq('channel_id',c.id).in('action',['mute','unmute']).order('created_at',{ascending:false}).limit(300)).data||[],seen=new Set();
  acts.forEach(a=>{if(seen.has(a.target))return;seen.add(a.target);if(a.action==='mute')v.forced.add(a.target)});
@@ -252,7 +288,7 @@ async function voiceJoin(c,ui){
  v.act=sb.channel('vact-'+c.id).on('postgres_changes',{event:'INSERT',schema:'public',table:'voice_actions',filter:'channel_id=eq.'+c.id},p=>vAct(p.new)).subscribe();
  v.ch=sb.channel('voice-'+c.id,{config:{presence:{key:me.id},broadcast:{self:false}}});
  v.ch.on('presence',{event:'sync'},vSync).on('broadcast',{event:'sig'},({payload})=>vSig(payload))
-  .subscribe(async st=>{if(st==='SUBSCRIBED'&&v===VC){v.ready=true;await v.ch.track({m:v.forced.has(me.id)})}});
+  .subscribe(async st=>{if(st==='SUBSCRIBED'&&v===VC){v.ready=true;await v.ch.track({m:v.forced.has(me.id),s:false})}});
  const lvl=an=>{const d=new Uint8Array(an.fftSize);an.getByteTimeDomainData(d);let s=0;for(const x of d)s+=(x-128)*(x-128);return Math.sqrt(s/d.length)/128};
  v.tick=setInterval(()=>{const on={};on[me.id]=v.track.enabled&&lvl(v.sa)>.03;
   Object.entries(v.peers).forEach(([u,p])=>on[u]=!v.forced.has(u)&&!!p.an&&lvl(p.an)>.03);
@@ -263,18 +299,26 @@ async function voice(b,w){
  if(!window.RTCPeerConnection)return b.append('This browser does not support voice.');
  const modAct=(uid,action)=>sb.from('voice_actions').insert({channel_id:VC.id,target:uid,action,actor_login:me.login}).then(({error})=>{
   if(error)return toast(error.message);sb.from('audit').insert({actor:me.login,action:`voice #${VC.name}: ${action} ${VC.prof[uid]?.login||uid}`})});
+ /* one persistent <video> per sharer, so redraws don't restart playback */
+ const vel=(v,u,stream)=>{let e=v.vels[u];
+  if(!e){e=v.vels[u]=h('video',{autoplay:true,muted:true,playsInline:true,title:'Click for fullscreen',style:'width:100%;max-height:300px;background:#000;border:2px solid var(--ink);display:block;cursor:zoom-in'});
+   e.onclick=()=>{(e.requestFullscreen||e.webkitRequestFullscreen)?.call(e)}}
+  if(e.srcObject!==stream)e.srcObject=stream;e.play().catch(()=>{});return e};
  const room=()=>{const v=VC,ids=[me.id,...Object.keys(v.pm).filter(u=>!((v.ignore[u]||0)>Date.now()))];
+  const stage=ids.filter(u=>u!==me.id&&vShows(v,u)).map(u=>h('div',{style:'margin-bottom:8px'},h('div',{},'🖥 '+dn(v.prof[u])+"'s screen"),vel(v,u,v.peers[u].vs)));
   const rows=ids.map(u=>{const p=v.prof[u]||{id:u,login:'...',role:'user'},fm=v.forced.has(u),sm=u===me.id?v.self:v.pm[u],
-    mod=can('voice_mod')&&u!==me.id&&(R[p.role]?.pos??-1)>mypos();
+    mod=can('voice_mod')&&u!==me.id&&(R[p.role]?.pos??-1)>mypos(),sh=u===me.id?!!v.share:!!v.ps[u]&&!v.blocked.has(u);
    return h('div',{className:'row'},h('span',{'data-vu':u,style:'display:inline-block;width:10px;height:10px;border-radius:50%;background:#888;border:1px solid var(--ink);margin-right:6px'}),
     av(p)?h('img',{src:av(p),width:20,height:20,style:'vertical-align:middle;margin-right:5px;object-fit:cover'}):'',
     h('b',{style:'color:'+rc(p.role)+';cursor:pointer',on:{click:()=>p.id&&openProfile(p)}},dn(p)+(u===me.id?' (you)':'')),badge(p.role),
-    fm?' 🔇 muted by mod':sm?' 🔇 mic off':'',
-    mod?h('div',{style:'margin-top:3px'},h('button',{on:{click:()=>modAct(u,fm?'unmute':'mute')}},fm?'Unmute':'Force mute'),' ',h('button',{on:{click:()=>{if(confirm('Kick '+dn(p)+' from #'+v.name+'?'))modAct(u,'kick')}}},'Kick')):'')});
+    fm?' 🔇 muted by mod':sm?' 🔇 mic off':'',sh?' 🖥 sharing':'',
+    mod?h('div',{style:'margin-top:3px'},h('button',{on:{click:()=>modAct(u,fm?'unmute':'mute')}},fm?'Unmute':'Force mute'),' ',sh?h('button',{on:{click:()=>modAct(u,'stopshare')}},'Stop share'):'',sh?' ':'',h('button',{on:{click:()=>{if(confirm('Kick '+dn(p)+' from #'+v.name+'?'))modAct(u,'kick')}}},'Kick')):'')});
+  const canShare=can('screenshare')&&!!navigator.mediaDevices?.getDisplayMedia;
   b.replaceChildren(h('div',{className:'bar'},h('b',{style:'flex:1'},'🎙 #'+v.name),
+   canShare?h('button',{on:{click:()=>v.share?shareStop():shareStart()}},v.share?'Stop sharing':'Share screen'):'',
    h('button',{disabled:v.forced.has(me.id),on:{click:()=>{v.self=!v.self;vApply()}}},v.self?'Unmute mic':'Mute mic'),h('button',{on:{click:()=>voiceLeave()}},'Leave')),
-   v.forced.has(me.id)?h('p',{},'A moderator has muted you in this channel.'):'',...rows,
-   h('p',{style:'opacity:.7;font-size:17px'},'Voice is peer-to-peer, so it works best with about 6 people or fewer.'))};
+   v.forced.has(me.id)?h('p',{},'A moderator has muted you in this channel.'):'',...stage,...rows,
+   h('p',{style:'opacity:.7;font-size:17px'},'Voice and screen sharing are peer-to-peer, so it works best with about 6 people or fewer. A sharer sends video to every viewer.'))};
  const lobby=async()=>{b.textContent='Loading...';
   const d=(await sb.from('voice_channels').select('*').order('id')).data||[];
   const mk=can('create_channels')?h('button',{on:{click:async()=>{const n=(prompt('Voice channel name (a-z, 0-9, -)')||'').trim().toLowerCase();if(!n)return;if(!/^[a-z0-9-]{1,24}$/.test(n))return toast('Use a-z, 0-9 and - (24 max)');
@@ -304,7 +348,7 @@ function shop(b,pre){
  bar.append(h('button',{on:{click:make}},'Make an app'),h('button',{on:{click:browse}},'Browse community'));
  b.append(bar,pane);make();
 }
-const PERMS={chat:'Send messages',images:'Upload images',create_channels:'Create channels',manage_channels:'Delete channels and set who can post',voice_mod:'Kick and force-mute in voice channels',delete_messages:'Delete any message',publish_apps:'Publish apps',delete_apps:'Delete any app',manage_emojis:'Manage custom emojis',ban:'Ban / unban',manage_roles:'Create roles and assign them',announce:'Post announcements',site_settings:'Change site settings',view_audit:'View audit log',bypass:'Bypass locks and size limits',admin_panel:'Open the admin panel'};
+const PERMS={chat:'Send messages',images:'Upload images',create_channels:'Create channels',manage_channels:'Delete channels and set who can post',voice_mod:'Kick and force-mute in voice channels',screenshare:'Share screen in voice channels',delete_messages:'Delete any message',publish_apps:'Publish apps',delete_apps:'Delete any app',manage_emojis:'Manage custom emojis',ban:'Ban / unban',manage_roles:'Create roles and assign them',announce:'Post announcements',site_settings:'Change site settings',view_audit:'View audit log',bypass:'Bypass locks and size limits',admin_panel:'Open the admin panel'};
 async function admin(b){
  if(!staff())return b.append('Staff only.');
  const pane=h('div'),bar=h('div',{className:'bar'}),log=a=>sb.from('audit').insert({actor:me.login,action:a});
@@ -349,7 +393,7 @@ async function admin(b){
     const{error}=await sb.from('channels').update({post_roles,post_users}).eq('id',c.id);toast(error?error.message:'Saved');if(!error)log(`#${c.name} posting: roles [${post_roles}] users [${post_users}]`)};
    return h('div',{className:'row'},h('b',{},'# '+c.name+' '),c.id===1?'(default) ':h('button',{on:{click:async()=>{if(!confirm('Delete #'+c.name+' and all its messages?'))return;const{error}=await sb.from('channels').delete().eq('id',c.id);toast(error?error.message:'Deleted');log('channel deleted: '+c.name);T.Channels()}}},'Delete'),
     h('div',{},'Can post:'),h('div',{},...boxes.map(([n,cb])=>h('label',{style:'margin-right:10px;white-space:nowrap'},cb,' '+n))),users,h('button',{on:{click:save}},'Save'))}),
-  h('hr'),h('b',{},'Voice channels'),h('p',{},'Create voice channels with the "+ New voice channel" button in the Voice app. Roles with the "Kick and force-mute" permission can moderate people ranked below them inside any voice channel.'),
+  h('hr'),h('b',{},'Voice channels'),h('p',{},'Create voice channels with the "+ New voice channel" button in the Voice app. Roles with the "Kick and force-mute" permission can moderate people ranked below them inside any voice channel, including stopping their screen share. Roles with "Share screen in voice channels" get a Share screen button.'),
   ...vd.map(c=>h('div',{className:'row'},'🎙 '+c.name+' ',h('button',{on:{click:async()=>{if(!confirm('Delete voice channel '+c.name+'?'))return;const{error}=await sb.from('voice_channels').delete().eq('id',c.id);toast(error?error.message:'Deleted');log('voice channel deleted: '+c.name);T.Channels()}}},'Delete'))),
   vd.length?'':'No voice channels yet.')},
  Chat:async()=>{const d=(await sb.from('messages').select('*').order('created_at',{ascending:false}).limit(40)).data||[];
@@ -446,7 +490,7 @@ async function online(b,w){
    ...u.map(x=>h('div',{className:'row'},av(x)?h('img',{src:av(x),width:20,height:20,style:'vertical-align:middle;margin-right:6px;object-fit:cover'}):'',h('b',{style:'color:'+rc(x.role)+';cursor:pointer',on:{click:()=>openProfile(x)}},dn(x)),badge(x.role),h('small',{style:'opacity:.6'},' @'+x.login))))};
  w.draw=draw;draw();
 }
-const APPS=[['weather','Weather','☁',weather],['rss','News','📰',rss],['radio','Radio','📻',radio,360,420],['chat','Global Chat','💬',chat,400,440],['voice','Voice','🎙',voice,380,440],['profile','My Profile','🪪',profileApp,360,470],['online',"Who's Online",'🟢',online,320,380],['shop','Workshop','🛠',shop,460,520],['builder','App Builder','🧱',builder,500,540],['calc','Calculator','🧮',calc,270,340],['paint','Paint','🎨',paint,430,420],['snake','Snake','🐍',snake,350,400],['term','Terminal','⌨',term,420,300],['notes','Notepad','📝',notes,340,300],['settings','Settings','⚙',settings,340,220],['admin','Admin','🛡',admin,540,480],['about','About','💾',about,340,220],['bin','Recycle Bin','🗑',binApp,380,340]];
+const APPS=[['weather','Weather','☁',weather],['rss','News','📰',rss],['radio','Radio','📻',radio,360,420],['chat','Global Chat','💬',chat,400,440],['voice','Voice','🎙',voice,480,540],['profile','My Profile','🪪',profileApp,360,470],['online',"Who's Online",'🟢',online,320,380],['shop','Workshop','🛠',shop,460,520],['builder','App Builder','🧱',builder,500,540],['calc','Calculator','🧮',calc,270,340],['paint','Paint','🎨',paint,430,420],['snake','Snake','🐍',snake,350,400],['term','Terminal','⌨',term,420,300],['notes','Notepad','📝',notes,340,300],['settings','Settings','⚙',settings,340,220],['admin','Admin','🛡',admin,540,480],['about','About','💾',about,340,220],['bin','Recycle Bin','🗑',binApp,380,340]];
 function lp(el,fn){let t,sx,sy;const c=()=>clearTimeout(t);
  el.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse')return;sx=e.clientX;sy=e.clientY;el._lp=0;const tg=e.target;t=setTimeout(()=>{el._lp=1;fn({clientX:sx,clientY:sy,target:tg,preventDefault(){},stopPropagation(){}})},500)});
  el.addEventListener('pointermove',e=>{if(Math.abs(e.clientX-sx)>10||Math.abs(e.clientY-sy)>10)c()});el.addEventListener('pointerup',c);el.addEventListener('pointercancel',c);
