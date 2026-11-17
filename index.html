@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Luni's dumbass Thing</title>
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<style>
+:root{--bg:#2b1b4d;--win:#c9c2e8;--ink:#1a1033;--pink:#ff4fa3;--mint:#6ff2c5;--hi:#f4efff;--lo:#7d73a8}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;overflow:hidden}
+body{background:radial-gradient(circle at 30% 20%,#4a2d85,var(--bg) 60%);font:21px/1.15 'VT323',monospace;color:var(--ink)}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:9999;background:repeating-linear-gradient(0deg,rgba(0,0,0,.14) 0 1px,transparent 1px 3px)}
+#desk{position:absolute;inset:0 0 40px;padding:12px;display:grid;grid-template-columns:repeat(auto-fill,84px);grid-auto-rows:92px;gap:6px;align-content:start}
+.ic{background:none;border:0;color:var(--hi);font:inherit;text-align:center;cursor:pointer;padding:4px}
+.ic i{display:block;font-style:normal;font-size:34px}
+.ic:hover,.ic:focus-visible{background:rgba(255,79,163,.3);outline:1px dotted var(--mint)}
+.w{position:absolute;display:flex;flex-direction:column;background:var(--win);border:2px solid;border-color:var(--hi) var(--ink) var(--ink) var(--hi);box-shadow:5px 5px 0 rgba(0,0,0,.4);resize:both;overflow:hidden;min-width:240px;min-height:160px;max-width:100vw}
+.w.hide{display:none}.w.drag iframe{pointer-events:none}
+.tb{background:linear-gradient(90deg,var(--pink),#7a3fd1);color:#fff;padding:2px 6px;display:flex;justify-content:space-between;align-items:center;cursor:move;touch-action:none}
+.tb button{width:24px;padding:0;margin-left:3px}
+.body{flex:1;overflow:auto;padding:8px;user-select:text}
+button,input,select,textarea{font:inherit;color:var(--ink)}
+button{background:var(--win);border:2px solid;border-color:var(--hi) var(--lo) var(--lo) var(--hi);cursor:pointer;padding:1px 10px}
+button:active{border-color:var(--lo) var(--hi) var(--hi) var(--lo)}
+input,select,textarea{background:#fff;border:2px solid;border-color:var(--lo) var(--hi) var(--hi) var(--lo);padding:2px 5px;min-width:0}
+textarea{width:100%;font-family:monospace;font-size:14px}
+.bar{display:flex;gap:4px;margin-bottom:6px;flex-wrap:wrap}.bar input{flex:1}
+.row{padding:4px 2px;border-bottom:1px dotted var(--lo)}.row a{color:#5b1fb5}
+.big{font-size:60px;color:var(--pink);line-height:1}
+.frame{width:100%;height:200px;border:2px solid var(--ink);background:#fff}
+.msg{padding:2px 0;word-break:break-word}.r-owner{color:var(--pink)}.r-admin{color:#d0541c}.r-mod{color:#1f8f6a}
+#tb{position:absolute;left:0;right:0;bottom:0;height:40px;background:var(--win);border-top:2px solid var(--hi);display:flex;align-items:center;gap:6px;padding:0 6px;z-index:9000}
+#tasks{flex:1;display:flex;gap:4px;overflow:hidden}#tasks button{max-width:140px;overflow:hidden;white-space:nowrap}
+#menu{position:absolute;left:4px;bottom:42px;background:var(--win);border:2px solid;border-color:var(--hi) var(--ink) var(--ink) var(--hi);z-index:9001;display:none;min-width:190px}
+#menu.on{display:block}#menu button{display:block;width:100%;text-align:left;border:0;padding:5px 10px}#menu button:hover{background:var(--pink);color:#fff}
+#toast{position:fixed;top:10px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--mint);padding:4px 12px;z-index:10000;display:none}
+@media(max-width:600px){.w{left:0!important;top:0!important;width:100%!important;height:calc(100% - 40px)!important}}
+@media(prefers-reduced-motion:no-preference){.start{animation:p 1.6s steps(2) infinite}@keyframes p{50%{background:var(--mint)}}}
+</style></head><body>
+<div id="desk"></div><div id="menu"></div><div id="toast"></div>
+<div id="tb"><button id="start" class="start">Luni's Thing</button><div id="tasks"></div><span id="tray"></span></div>
+<script>
+/* ====== CONFIG: paste your Supabase values (see schema.sql) ====== */
+const CFG={url:'',key:''};
+/* ================================================================= */
+const $=s=>document.querySelector(s);
+const h=(t,p,...k)=>{const e=document.createElement(t);for(const x in p||{}){if(x==='on')for(const y in p.on)e.addEventListener(y,p.on[y]);else if(x in e)e[x]=p[x];else e.setAttribute(x,p[x])}k.flat().forEach(c=>e.append(c));return e};
+const store={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
+const toast=m=>{const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.display='none',2500)};
+const sb=CFG.url&&window.supabase?supabase.createClient(CFG.url,CFG.key):null;
+let me=null;const staff=()=>['owner','admin','mod'].includes(me?.role);
+const noBack=b=>b.append(h('p',{},'Backend not set up yet. Fill in CFG at the top of index.html (see schema.sql).'));
+const needLogin=b=>b.append(h('p',{},'Log in with GitHub to use this.'),h('button',{on:{click:login}},'Log in with GitHub'));
+const login=()=>sb?sb.auth.signInWithOAuth({provider:'github',options:{redirectTo:location.origin+location.pathname}}):toast('Backend not set up');
+
+/* ---- window manager ---- */
+const wins={};let z=10;
+function front(w){z++;w.el.style.zIndex=z;w.el.classList.remove('hide')}
+function win(id,title,icon,fn,wd=440,ht=400){
+ if(wins[id])return front(wins[id]);
+ const n=Object.keys(wins).length,body=h('div',{className:'body'}),el=h('div',{className:'w',style:`left:${50+n*26}px;top:${30+n*26}px;width:${wd}px;height:${ht}px`});
+ const w={el,onclose:null};wins[id]=w;
+ const task=h('button',{on:{click:()=>el.classList.contains('hide')||el.style.zIndex==z?el.classList.toggle('hide'):front(w)}},icon+' '+title);
+ const x=()=>{w.onclose&&w.onclose();el.remove();task.remove();delete wins[id]};
+ const tb=h('div',{className:'tb'},icon+' '+title,h('span',{},h('button',{on:{click:()=>el.classList.add('hide')}},'_'),h('button',{on:{click:x}},'x')));
+ tb.onpointerdown=e=>{if(e.target.tagName==='BUTTON')return;front(w);el.classList.add('drag');const ox=e.clientX-el.offsetLeft,oy=e.clientY-el.offsetTop;
+  const mv=m=>{el.style.left=Math.max(0,m.clientX-ox)+'px';el.style.top=Math.max(0,m.clientY-oy)+'px'};
+  const up=()=>{el.classList.remove('drag');removeEventListener('pointermove',mv);removeEventListener('pointerup',up)};addEventListener('pointermove',mv);addEventListener('pointerup',up)};
+ el.onpointerdown=()=>{z++;el.style.zIndex=z};
+ el.append(tb,body);document.body.append(el);$('#tasks').append(task);front(w);
+ Promise.resolve(fn(body,w)).catch(()=>body.append('Something broke.'));
+}
+
+/* ---- apps ---- */
+const WC={0:'Clear',1:'Mostly clear',2:'Partly cloudy',3:'Overcast',45:'Fog',48:'Fog',51:'Drizzle',61:'Rain',63:'Rain',65:'Heavy rain',71:'Snow',73:'Snow',75:'Heavy snow',80:'Showers',95:'Thunderstorm'};
+function weather(b){
+ const out=h('div'),inp=h('input',{placeholder:'City',value:store.get('city','')});
+ const go=async()=>{const q=inp.value.trim();if(!q)return;out.textContent='Loading...';
+  try{const g=(await(await fetch('https://geocoding-api.open-meteo.com/v1/search?count=1&name='+encodeURIComponent(q))).json()).results?.[0];
+   if(!g){out.textContent='City not found.';return}store.set('city',q);
+   const d=await(await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${g.latitude}&longitude=${g.longitude}&current=temperature_2m,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,weather_code&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto`)).json();
+   out.replaceChildren(h('div',{className:'big'},Math.round(d.current.temperature_2m)+'°F'),h('div',{},`${g.name}, ${g.admin1||g.country}: ${WC[d.current.weather_code]||'Weather'}, wind ${d.current.wind_speed_10m} mph`),
+    ...d.daily.time.map((t,i)=>h('div',{className:'row'},new Date(t+'T12:00').toLocaleDateString([],{weekday:'short'})+`  ${WC[d.daily.weather_code[i]]||''}  ${Math.round(d.daily.temperature_2m_max[i])}° / ${Math.round(d.daily.temperature_2m_min[i])}°`)));
+  }catch{out.textContent='Weather failed to load.'}};
+ inp.onkeydown=e=>e.key==='Enter'&&go();b.append(h('div',{className:'bar'},inp,h('button',{on:{click:go}},'Go')),out);go();
+}
+const FEEDS=[['BBC World','https://feeds.bbci.co.uk/news/world/rss.xml'],['Hacker News','https://hnrss.org/frontpage'],['NASA','https://www.nasa.gov/feed/'],['Ars Technica','https://feeds.arstechnica.com/arstechnica/index']];
+function rss(b){
+ const mine=store.get('feeds',[]),sel=h('select'),out=h('div'),url=h('input',{placeholder:'Add feed URL'});
+ const fill=()=>sel.replaceChildren(...[...FEEDS,...mine].map(f=>h('option',{value:f[1]},f[0])));
+ const load=async()=>{out.textContent='Loading...';
+  try{const d=await(await fetch('https://api.rss2json.com/v1/api.json?rss_url='+encodeURIComponent(sel.value))).json();
+   out.replaceChildren(...(d.items||[]).slice(0,25).map(i=>h('div',{className:'row'},h('a',{href:i.link,target:'_blank',rel:'noopener noreferrer'},i.title))));
+   if(!d.items?.length)out.textContent='No stories found.'}catch{out.textContent='Feed failed to load.'}};
+ sel.onchange=load;
+ const add=()=>{try{const u=new URL(url.value.trim());mine.push([u.hostname,u.href]);store.set('feeds',mine);url.value='';fill();sel.value=u.href;load()}catch{toast('Enter a full feed URL')}};
+ fill();b.append(h('div',{className:'bar'},sel),h('div',{className:'bar'},url,h('button',{on:{click:add}},'Add')),out);load();
+}
+const au=new Audio();let nowp='';
+function radio(b){
+ const q=h('input',{placeholder:'Search stations or genre (jazz, lofi...)',value:'lofi'}),out=h('div');
+ const go=async()=>{out.textContent='Searching...';
+  try{const d=await(await fetch('https://de1.api.radio-browser.info/json/stations/search?hidebroken=true&limit=30&order=clickcount&reverse=true&name='+encodeURIComponent(q.value))).json();
+   out.replaceChildren(...d.map(s=>h('div',{className:'row'},h('button',{on:{click:()=>{au.src=s.url_resolved;au.play().catch(()=>toast('Station would not play'));nowp=s.name;tray()}}},'Play'),' '+s.name)));
+   if(!d.length)out.textContent='No stations found.'}catch{out.textContent='Radio search failed.'}};
+ q.onkeydown=e=>e.key==='Enter'&&go();
+ b.append(h('div',{className:'bar'},q,h('button',{on:{click:go}},'Search'),h('button',{on:{click:()=>{au.pause();nowp='';tray()}}},'Stop')),out);go();
+}
+function notes(b){const t=h('textarea',{rows:14,value:store.get('notes','')});t.oninput=()=>store.set('notes',t.value);b.append(t)}
+async function chat(b,w){
+ if(!sb)return noBack(b);
+ const P={};((await sb.from('profiles').select('id,role')).data||[]).forEach(p=>P[p.id]=p.role);
+ const list=h('div',{style:'height:calc(100% - 40px);overflow:auto'}),inp=h('input',{placeholder:me?'Say something':'Log in to chat',disabled:!me||me.role==='banned',maxLength:500,style:'width:100%'});
+ const add=m=>{const r=h('div',{className:'msg',id:'m'+m.id},h('b',{className:'r-'+P[m.user_id]},m.login),': ',m.body);
+  if(me&&(staff()||me.id===m.user_id))r.append(' ',h('button',{on:{click:()=>sb.from('messages').delete().eq('id',m.id)}},'x'));
+  list.append(r);list.scrollTop=1e9};
+ ((await sb.from('messages').select('*').order('created_at',{ascending:false}).limit(50)).data||[]).reverse().forEach(add);
+ const ch=sb.channel('chat').on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},p=>add(p.new)).on('postgres_changes',{event:'DELETE',schema:'public',table:'messages'},p=>list.querySelector('#m'+p.old.id)?.remove()).subscribe();
+ w.onclose=()=>sb.removeChannel(ch);
+ inp.onkeydown=async e=>{if(e.key==='Enter'&&inp.value.trim()){const body=inp.value.trim();inp.value='';const{error}=await sb.from('messages').insert({user_id:me.id,login:me.login,body});if(error)toast(error.message)}};
+ b.style.padding='4px';b.append(list,inp);if(!me)b.append(h('button',{on:{click:login}},'Log in with GitHub'));
+}
+/* ---- user apps + workshop ---- */
+const TPL='<!doctype html>\n<body style="font-family:sans-serif;text-align:center">\n<h1>Hello!</h1>\n<button onclick="this.textContent=\'clicked\'">Click me</button>\n</body>';
+function install(a){const l=store.get('apps',[]);if(!l.find(x=>x.id===String(a.id)))l.push({id:String(a.id),name:a.name,icon:a.icon||'📦',code:a.code});store.set('apps',l);desk();toast('Installed: '+a.name)}
+const runApp=a=>win('u'+a.id,a.name,a.icon,b=>{b.style.padding='0';b.append(h('iframe',{sandbox:'allow-scripts',srcdoc:a.code,style:'width:100%;height:100%;border:0;background:#fff'}))});
+function shop(b){
+ const bar=h('div',{className:'bar'}),pane=h('div');
+ const make=()=>{
+  const nm=h('input',{placeholder:'App name',maxLength:30}),ic=h('input',{placeholder:'Icon',maxLength:2,style:'flex:0 0 60px'}),code=h('textarea',{rows:9,value:TPL}),prev=h('iframe',{sandbox:'allow-scripts',className:'frame'});
+  const run=()=>prev.srcdoc=code.value,mk=()=>({id:'u'+Date.now(),name:nm.value.trim()||'Untitled',icon:ic.value||'📦',code:code.value});
+  const pub=async()=>{if(!sb)return toast('Backend not set up');if(!me)return toast('Log in first');
+   const a=mk(),{error}=await sb.from('apps').insert({author_id:me.id,author_login:me.login,name:a.name,icon:a.icon,code:a.code});toast(error?error.message:'Published!')};
+  pane.replaceChildren(h('div',{className:'bar'},nm,ic),code,h('div',{className:'bar'},h('button',{on:{click:run}},'Run'),h('button',{on:{click:()=>install(mk())}},'Save to desktop'),h('button',{on:{click:pub}},'Publish')),prev);run()};
+ const browse=async()=>{if(!sb)return pane.replaceChildren(h('p',{},'Backend not set up yet.'));pane.textContent='Loading...';
+  const d=(await sb.from('apps').select('*').order('created_at',{ascending:false}).limit(50)).data||[];
+  pane.replaceChildren(...(d.length?d.map(a=>h('div',{className:'row'},`${a.icon||'📦'} ${a.name} by ${a.author_login} `,h('button',{on:{click:()=>install(a)}},'Install'),me&&(me.id===a.author_id||staff())?h('button',{on:{click:async()=>{await sb.from('apps').delete().eq('id',a.id);browse()}}},'Delete'):'')):[h('p',{},'Nothing published yet. Be the first.')]))};
+ bar.append(h('button',{on:{click:make}},'Make an app'),h('button',{on:{click:browse}},'Browse community'));
+ b.append(bar,pane);make();
+}
+async function admin(b){
+ if(!staff())return b.append('Staff only.');
+ const d=(await sb.from('profiles').select('*').order('created_at')).data||[];
+ b.replaceChildren(h('p',{},me.role==='owner'?'Change roles below.':'Only the owner can change roles.'),...d.map(p=>{
+  const s=h('select',{disabled:me.role!=='owner'},...['owner','admin','mod','user','banned'].map(r=>h('option',{value:r,selected:r===p.role},r)));
+  s.onchange=async()=>{const{error}=await sb.from('profiles').update({role:s.value}).eq('id',p.id);toast(error?error.message:'Role updated')};
+  return h('div',{className:'row'},p.login+' ',s)}));
+}
+function about(b){b.append(h('h2',{},"Luni's dumbass Thing"),h('p',{},'A tiny operating system that lives in your browser. Built by BuniLuni.'),h('p',{},'Make an app in the Workshop, publish it, and everyone can install it.'))}
+
+const APPS=[['weather','Weather','☁',weather],['rss','News','📰',rss],['radio','Radio','📻',radio,360,420],['chat','Global Chat','💬',chat,400,440],['shop','Workshop','🛠',shop,460,520],['notes','Notepad','📝',notes,340,300],['admin','Admin','🛡',admin,380,360],['about','About','💾',about,340,220]];
+function desk(){
+ const d=$('#desk'),m=$('#menu');d.replaceChildren();m.replaceChildren();
+ const items=[...APPS.filter(a=>a[0]!=='admin'||staff()).map(a=>[a[2],a[1],()=>win(a[0],a[1],a[2],a[3],a[4],a[5])]),...store.get('apps',[]).map(a=>[a.icon,a.name,()=>runApp(a)])];
+ items.forEach(([i,n,f])=>{d.append(h('button',{className:'ic',on:{dblclick:f,keydown:e=>e.key==='Enter'&&f(),click:e=>matchMedia('(pointer:coarse)').matches&&f()}},h('i',{},i),n));m.append(h('button',{on:{click:()=>{f();m.classList.remove('on')}}},i+' '+n))});
+}
+function tray(){
+ const t=$('#tray');t.replaceChildren(nowp?h('span',{},'♪ '+nowp.slice(0,18)+' '):'',me?h('button',{on:{click:async()=>{await sb.auth.signOut()}}},`${me.login} [${me.role}] - log out`):h('button',{on:{click:login}},'Log in with GitHub'),' ',h('span',{id:'clk'}));clock()}
+const clock=()=>{const c=$('#clk');if(c)c.textContent=new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})};
+async function loadMe(){me=null;if(sb){const{data:{session}}=await sb.auth.getSession();if(session)me=(await sb.from('profiles').select('*').eq('id',session.user.id).single()).data}desk();tray()}
+$('#start').onclick=()=>$('#menu').classList.toggle('on');
+$('#desk').onclick=()=>$('#menu').classList.remove('on');
+sb?.auth.onAuthStateChange(()=>setTimeout(loadMe,0));
+loadMe();setInterval(clock,20000);
+</script></body></html>
