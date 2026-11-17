@@ -109,7 +109,7 @@ const badge=r=>h('span',{style:`background:${rc(r)};color:${ink(rc(r))};font-siz
 function openProfile(p){win('p'+p.id,dn(p),'🪪',b=>{const a=av(p);
  b.append(h('div',{style:'text-align:center'},a?h('img',{src:a,width:96,height:96,style:'border:2px solid var(--ink);object-fit:cover'}):h('div',{className:'big'},'🪪'),h('h2',{style:'margin:6px 0 0'},dn(p)),
   h('div',{},h('a',{href:'https://github.com/'+encodeURIComponent(p.login),target:'_blank',rel:'noopener noreferrer'},'@'+p.login),badge(p.role),...(p.id===me?.id?myRoleNames:[]).filter(n=>n!==p.role).map(badge))),
-  h('p',{style:'white-space:pre-wrap'},p.bio||'No description yet.'),h('div',{style:'opacity:.7'},p.created_at?'Joined '+new Date(p.created_at).toLocaleDateString():''))},340,380)}
+  h('p',{style:'white-space:pre-wrap'},p.bio||'No description yet.'),h('div',{style:'opacity:.7'},p.created_at?'Joined '+new Date(p.created_at).toLocaleDateString():''),me&&p.id!==me.id?h('button',{on:{click:()=>openDM(p)}},'💌 Message'):'')},340,380)}
 async function profileApp(b){
  if(!sb)return noBack(b);if(!me)return needLogin(b);
  const nm=h('input',{placeholder:'Display name (blank = '+me.login+')',maxLength:32,value:me.display_name||''}),bio=h('textarea',{rows:4,maxLength:200,placeholder:'Tell people about yourself (200 characters)'}),
@@ -254,6 +254,61 @@ if(me&&(can('delete_messages')||me.id===m.user_id))
  if(!me)b.append(h('button',{on:{click:login}},'Log in with GitHub'));gate();load();
 }
 
+/* ---- sounds ---- */
+const SN=()=>Object.assign({on:true,vol:.5,desk:false},store.get('snd',{}));
+let _ac=null;
+const TONES={chat:[[880,.07]],dm:[[660,.09],[990,.12]],note:[[784,.1],[988,.1],[1318,.18]],join:[[440,.08],[660,.12]],leave:[[660,.08],[440,.12]],mute:[[300,.07]],unmute:[[520,.07]],call:[[523,.15],[659,.15],[784,.15]]};
+function snd(n){const s=SN();if(!s.on)return;try{_ac??=new(window.AudioContext||window.webkitAudioContext)();_ac.resume?.();let t=_ac.currentTime;
+ for(const[f,d]of TONES[n]||[]){const o=_ac.createOscillator(),g=_ac.createGain();o.type='square';o.frequency.value=f;g.gain.setValueAtTime(.12*s.vol,t);g.gain.exponentialRampToValueAtTime(.0001,t+d);o.connect(g).connect(_ac.destination);o.start(t);o.stop(t+d);t+=d*.9}}catch{}}
+addEventListener('pointerdown',()=>{try{_ac??=new(window.AudioContext||window.webkitAudioContext)();_ac.resume?.()}catch{}},{once:true});
+function ping(title,body){const s=SN();if(s.desk&&document.hidden&&window.Notification?.permission==='granted')try{new Notification(title,{body})}catch{}}
+/* ---- global notifier: DMs, staff notifications, chat pings (works with windows closed) ---- */
+let GN=null,dmUnread={},noteUnread=0;
+const unreadTotal=()=>Object.values(dmUnread).reduce((a,b)=>a+b,0)+noteUnread;
+async function startNotify(){
+ if(GN){sb.removeChannel(GN);GN=null}dmUnread={};noteUnread=0;if(!sb||!me)return;
+ ((await sb.from('dms').select('sender_id').eq('recipient_id',me.id).is('read_at',null)).data||[]).forEach(r=>dmUnread[r.sender_id]=(dmUnread[r.sender_id]||0)+1);
+ noteUnread=(await sb.from('notifications').select('id',{count:'exact',head:true}).eq('recipient',me.id).is('read_at',null)).count||0;tray();
+ GN=sb.channel('gn-'+me.id)
+  .on('postgres_changes',{event:'INSERT',schema:'public',table:'dms',filter:'recipient_id=eq.'+me.id},async p=>{const m=p.new;
+   if(wins.dm?.onDm?.(m))return snd('dm');
+   dmUnread[m.sender_id]=(dmUnread[m.sender_id]||0)+1;let u=wins.dm?.P?.[m.sender_id];
+   if(!u)u=(await sb.from('profiles').select(PCOLS).eq('id',m.sender_id).maybeSingle()).data;
+   snd('dm');toast('💌 '+(u?dn(u):'Someone')+': '+m.body.slice(0,60));ping('Message from '+(u?dn(u):'someone'),m.body);wins.dm?.draw?.();tray()})
+  .on('postgres_changes',{event:'INSERT',schema:'public',table:'notifications',filter:'recipient=eq.'+me.id},p=>{const n=p.new;noteUnread++;snd('note');toast('🔔 '+n.title);ping(n.title,n.body||'');wins.dm?.draw?.();tray()})
+  .on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},p=>{if(p.new.user_id===me.id)return;const w=wins.chat;if(!w||w.el.classList.contains('hide')||!document.hasFocus())snd('chat')})
+  .subscribe()}
+/* ---- Messages app: DMs + notifications ---- */
+function openDM(u){if(u.id===me?.id)return;openApp('dm');wins.dm?.open?.(u)}
+async function dmApp(b,w){
+ if(!sb)return noBack(b);if(!me)return needLogin(b);
+ const P=w.P={},list=h('div',{style:'width:150px;overflow:auto;border-right:2px solid var(--lo);padding-right:4px'}),pane=h('div',{style:'flex:1;display:flex;flex-direction:column;min-width:0;padding-left:6px'});
+ let cur=null,last={};
+ b.style.cssText+=';display:flex;padding:4px';b.append(list,pane);
+ const prof=async id=>P[id]||(P[id]=(await sb.from('profiles').select(PCOLS).eq('id',id).maybeSingle()).data);
+ const bubble=m=>h('div',{className:'msg',id:'d'+m.id,style:m.sender_id===me.id?'text-align:right':''},h('small',{style:'opacity:.6'},new Date(m.created_at).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})+' '),h('span',{},...rich(m.body)));
+ w.draw=async()=>{const rows=(await sb.from('dms').select('sender_id,recipient_id,body,created_at').or(`sender_id.eq.${me.id},recipient_id.eq.${me.id}`).order('created_at',{ascending:false}).limit(200)).data||[];
+  last={};rows.forEach(r=>{const o=r.sender_id===me.id?r.recipient_id:r.sender_id;last[o]??=r});
+  const ids=Object.keys({...last,...dmUnread});await Promise.all(ids.map(prof));
+  const find=h('input',{placeholder:'Find @login',style:'width:100%;box-sizing:border-box'});
+  find.onkeydown=async e=>{if(e.key!=='Enter'||!find.value.trim())return;const q=find.value.trim().replace(/^@/,'');const u=(await sb.from('profiles').select(PCOLS).ilike('login',q).maybeSingle()).data;if(!u)return toast('No user @'+q);if(u.id===me.id)return toast("That's you");P[u.id]=u;open(u)};
+  list.replaceChildren(find,h('div',{className:'row'},h('button',{style:'width:100%',on:{click:notes}},'🔔 Notifications'+(noteUnread?` (${noteUnread})`:''))),
+   ...ids.filter(i=>P[i]).sort((a,c)=>(last[c]?.created_at||'').localeCompare(last[a]?.created_at||'')).map(i=>h('div',{className:'row'},h('button',{style:'width:100%;text-align:left;overflow:hidden;white-space:nowrap;'+(i===cur?'font-weight:bold':''),on:{click:()=>open(P[i])}},dn(P[i])+(dmUnread[i]?` (${dmUnread[i]})`:'')))));
+  tray()};
+ const open=async u=>{cur=u.id;P[u.id]=u;const msgs=h('div',{style:'flex:1;overflow:auto;background:#fff;border:2px solid;border-color:var(--lo) var(--hi) var(--hi) var(--lo);padding:3px'}),inp=h('input',{maxLength:1000,placeholder:'Message '+dn(u),style:'flex:1'});
+  const send=async()=>{const body=inp.value.trim();if(!body)return;inp.value='';const{data,error}=await sb.from('dms').insert({sender_id:me.id,recipient_id:u.id,body}).select().single();if(error)return toast(error.message);msgs.append(bubble(data));msgs.scrollTop=1e9;last[u.id]=data};
+  inp.onkeydown=e=>e.key==='Enter'&&send();
+  pane.replaceChildren(h('div',{className:'bar'},h('b',{style:'color:'+rc(u.role)+';cursor:pointer',on:{click:()=>openProfile(u)}},dn(u)),badge(u.role)),msgs,h('div',{className:'bar',style:'margin:4px 0 0'},inp,h('button',{on:{click:send}},'Send')));
+  w.append=m=>{if(m.id&&msgs.querySelector('#d'+m.id))return;msgs.append(bubble(m));msgs.scrollTop=1e9};
+  ((await sb.from('dms').select('*').or(`and(sender_id.eq.${me.id},recipient_id.eq.${u.id}),and(sender_id.eq.${u.id},recipient_id.eq.${me.id})`).order('created_at',{ascending:false}).limit(60)).data||[]).reverse().forEach(m=>msgs.append(bubble(m)));msgs.scrollTop=1e9;inp.focus();
+  if(dmUnread[u.id]){delete dmUnread[u.id];await sb.from('dms').update({read_at:new Date().toISOString()}).eq('recipient_id',me.id).eq('sender_id',u.id).is('read_at',null)}w.draw()};
+ const notes=async()=>{cur=null;w.append=null;const d=(await sb.from('notifications').select('*').order('created_at',{ascending:false}).limit(50)).data||[];
+  pane.replaceChildren(h('div',{className:'bar'},h('b',{},'🔔 Notifications'),h('button',{on:{click:async()=>{await sb.from('notifications').delete().eq('recipient',me.id);notes()}}},'Clear all')),
+   h('div',{style:'flex:1;overflow:auto'},...(d.length?d.map(n=>h('div',{className:'row',style:n.read_at?'opacity:.6':''},h('b',{},n.title),n.body?h('div',{},n.body):'',h('small',{style:'opacity:.6'},(n.sender_login?'from @'+n.sender_login+' · ':'')+new Date(n.created_at).toLocaleString()))):[h('p',{},'Nothing yet.')])));
+  if(noteUnread){noteUnread=0;await sb.from('notifications').update({read_at:new Date().toISOString()}).eq('recipient',me.id).is('read_at',null)}w.draw()};
+ w.open=open;w.onDm=m=>{if(cur===m.sender_id&&w.append){w.append(m);sb.from('dms').update({read_at:new Date().toISOString()}).eq('id',m.id).then(()=>{});return true}return false};
+ await w.draw();pane.append(h('p',{style:'opacity:.7'},'Pick a conversation, or find someone by login.'));
+}
 /* ---- voice channels: WebRTC mesh, signaling over Supabase Realtime ---- */
 const ICE={iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]};
 let VC=null; /* the voice room you're currently in */
@@ -311,6 +366,7 @@ async function vSig(m){const v=VC;if(!v||m.to!==me.id||(v.ignore[m.from]||0)>Dat
  }catch{}}
 async function vSync(){const v=VC;if(!v)return;
  const st=v.ch.presenceState(),ids=Object.keys(st).filter(u=>u!==me.id&&!((v.ignore[u]||0)>Date.now()));
+ if(v.seen){ids.filter(u=>!v.seen.has(u)).forEach(()=>snd('join'));[...v.seen].filter(u=>!ids.includes(u)).forEach(()=>snd('leave'))}v.seen=new Set(ids);
  v.pm={};v.ps={};v.pn={};ids.forEach(u=>{v.pm[u]=!!st[u][0]?.m;v.ps[u]=!!st[u][0]?.s;v.pn[u]=!!st[u][0]?.n});
  v.blocked.forEach(u=>{if(!v.ps[u])v.blocked.delete(u)}); /* a stopped sharer gets a clean slate */
  v.watching.forEach(u=>{if(!v.ps[u])v.watching.delete(u)}); /* stop "watching" anyone who stopped sharing */
@@ -353,7 +409,7 @@ function shareStop(msg){const v=VC;if(!v||!v.share)return;const s=v.share;v.shar
  v.wants.clear();
  Object.values(v.peers).forEach(p=>p.vsender?.replaceTrack(null).catch(()=>{}));
  vApply();if(msg)toast(msg)}
-function voiceLeave(msg){const v=VC;if(!v)return;VC=null;clearInterval(v.tick);Object.keys(v.peers).forEach(u=>vClose(v,u));
+function voiceLeave(msg){const v=VC;if(!v)return;snd('leave');VC=null;clearInterval(v.tick);Object.keys(v.peers).forEach(u=>vClose(v,u));
  v.share?.getTracks().forEach(t=>{t.onended=null;t.stop()});
  v.stream.getTracks().forEach(t=>t.stop());try{v.ac.close()}catch{}sb.removeChannel(v.ch);sb.removeChannel(v.act);if(v.cc)sb.removeChannel(v.cc);v.ui?.();tray();if(msg)toast(msg)}
 /* Returning to the tab can resume a browser-suspended AudioContext. Re-track
@@ -390,7 +446,7 @@ async function voiceJoin(c,ui,textOnly){
  v.tick=setInterval(()=>{const on={};on[me.id]=v.track.enabled&&lvl(v.sa)>.03;
   Object.entries(v.peers).forEach(([u,p])=>on[u]=!v.forced.has(u)&&!!p.an&&lvl(p.an)>.03);
   document.querySelectorAll('[data-vu]').forEach(e=>e.style.background=on[e.dataset.vu]?'var(--mint)':'#888')},150);
- tray();ui?.()}
+ snd('join');tray();ui?.()}
 
 /* text chat inside a voice room (persistent element so redraws don't wipe it) */
 function vchat(v){if(v.chat)return v.chat;
@@ -431,7 +487,7 @@ function vchat(v){if(v.chat)return v.chat;
  };
  inp.onkeydown=e=>{if(e.key==='Enter')send()};
  v.cc=sb.channel('vchat-'+v.id)
-  .on('postgres_changes',{event:'INSERT',schema:'public',table:'voice_messages',filter:'channel_id=eq.'+v.id},p=>add(p.new))
+  .on('postgres_changes',{event:'INSERT',schema:'public',table:'voice_messages',filter:'channel_id=eq.'+v.id},p=>{if(p.new.user_id!==me.id)snd('chat');add(p.new)})
   .on('postgres_changes',{event:'DELETE',schema:'public',table:'voice_messages'},p=>list.querySelector('#vm'+CSS.escape(String(p.old.id)))?.remove())
   .subscribe((status,error)=>{if(status==='CHANNEL_ERROR'||status==='TIMED_OUT')console.warn('Voice chat Realtime subscription:',status,error||'')});
  (async()=>{
@@ -470,7 +526,7 @@ async function voice(b,w){
   const c=vchat(v),had=document.activeElement===c.inp;
   b.replaceChildren(h('div',{className:'bar'},h('b',{style:'flex:1'},'🎙 #'+v.name),
    canShare?h('button',{on:{click:()=>v.share?shareStop():shareStart()}},v.share?'Stop sharing':'Share screen'):'',
-   v.nomic?'':h('button',{disabled:v.forced.has(me.id),on:{click:()=>{v.self=!v.self;vApply()}}},v.self?'Unmute mic':'Mute mic'),h('button',{on:{click:()=>voiceLeave()}},'Leave')),
+   v.nomic?'':h('button',{disabled:v.forced.has(me.id),on:{click:()=>{v.self=!v.self;snd(v.self?'mute':'unmute');vApply()}}},v.self?'Unmute mic':'Mute mic'),h('button',{on:{click:()=>voiceLeave()}},'Leave')),
    v.forced.has(me.id)?h('p',{},'A moderator has muted you in this channel.'):'',...stage,...rows,c.el,
    h('p',{style:'opacity:.7;font-size:17px'},'Voice and screen sharing are peer-to-peer, so it works best with about 6 people or fewer. Screen video is only sent to people who click Watch.'));
   c.list.scrollTop=1e9;if(had)c.inp.focus()};
@@ -505,7 +561,7 @@ function shop(b,pre){
  bar.append(h('button',{on:{click:make}},'Make an app'),h('button',{on:{click:browse}},'Browse community'));
  b.append(bar,pane);make();
 }
-const PERMS={chat:'Send messages',images:'Upload images',create_channels:'Create channels',manage_channels:'Delete channels and set who can post',voice_mod:'Kick and force-mute in voice channels',screenshare:'Share screen in voice channels',delete_messages:'Delete any message',publish_apps:'Publish apps',delete_apps:'Delete any app',manage_emojis:'Manage custom emojis',ban:'Ban / unban',manage_roles:'Create roles and assign them',announce:'Post announcements',site_settings:'Change site settings',view_audit:'View audit log',bypass:'Bypass locks and size limits',admin_panel:'Open the admin panel'};
+const PERMS={chat:'Send messages',images:'Upload images',create_channels:'Create channels',manage_channels:'Delete channels and set who can post',voice_mod:'Kick and force-mute in voice channels',screenshare:'Share screen in voice channels',delete_messages:'Delete any message',publish_apps:'Publish apps',delete_apps:'Delete any app',manage_emojis:'Manage custom emojis',ban:'Ban / unban',manage_roles:'Create roles and assign them',announce:'Post announcements',site_settings:'Change site settings',view_audit:'View audit log',bypass:'Bypass locks and size limits',admin_panel:'Open the admin panel',notify:'Send notifications to users'};
 async function admin(b){
  if(!staff())return b.append('Staff only.');
  const pane=h('div'),bar=h('div',{className:'bar'}),log=a=>sb.from('audit').insert({actor:me.login,action:a});
@@ -597,11 +653,18 @@ async function admin(b){
   pane.replaceChildren(t,h('button',{on:{click:async()=>{if(!t.value.trim())return;const{error}=await sb.from('announcements').insert({body:t.value.trim(),author_login:me.login});if(error)return toast(error.message);log('announcement posted');T.Announce();loadAnn()}}},'Post to everyone'),l)},
  Settings:async()=>{const s={};((await sb.from('settings').select('*')).data||[]).forEach(r=>s[r.key]=r.value==='true');
   pane.replaceChildren(...[['chat_locked','Lock chat (people with the bypass permission can still talk)'],['publish_locked','Lock app publishing']].map(([k,n])=>{const c=h('input',{type:'checkbox',checked:!!s[k]});c.onchange=async()=>{const{error}=await sb.from('settings').upsert({key:k,value:String(c.checked)});toast(error?error.message:'Saved');log(`${k} = ${c.checked}`)};return h('div',{className:'row'},c,' '+n)}))},
+ Notify:async()=>{const us=(await sb.from('profiles').select('id,login,display_name').order('login')).data||[],
+  all=h('input',{type:'checkbox',checked:true}),sel=h('select',{multiple:true,size:8,style:'width:100%',disabled:true},...us.map(u=>h('option',{value:u.id},dn(u)+' @'+u.login))),
+  ti=h('input',{maxLength:100,placeholder:'Title'}),bo=h('textarea',{rows:3,maxLength:500,placeholder:'Message (optional)'});
+  all.onchange=()=>sel.disabled=all.checked;
+  pane.replaceChildren(h('div',{className:'row'},all,' Everyone'),sel,h('small',{},'Ctrl/Shift-click to pick several users'),h('div',{className:'bar'},ti),bo,
+   h('button',{on:{click:async()=>{const t=all.checked?null:[...sel.selectedOptions].map(o=>o.value);if(t&&!t.length)return toast('Pick at least one user');if(!ti.value.trim())return toast('Title required');
+    const{data,error}=await sb.rpc('send_notification',{targets:t,p_title:ti.value.trim(),p_body:bo.value.trim()});if(error)return toast(error.message);toast('Sent to '+data+' user(s)');ti.value=bo.value=''}}},'Send notification'))},
  Log:async()=>{const d=(await sb.from('audit').select('*').order('created_at',{ascending:false}).limit(60)).data||[];pane.replaceChildren(...d.map(r=>h('div',{className:'row'},`${new Date(r.created_at).toLocaleString()} - ${r.actor}: ${r.action}`)),d.length?'':'Nothing logged yet.')},
  Stats:async()=>{const day=new Date(Date.now()-864e5).toISOString();const v=await Promise.all([cnt('profiles'),cnt('profiles',q=>q.eq('role','banned')),cnt('messages'),cnt('messages',q=>q.gte('created_at',day)),cnt('apps')]);
   pane.replaceChildren(...['Users','Banned','Messages','Messages (24h)','Apps'].map((n,i)=>h('div',{className:'row'},`${n}: ${v[i]}`)))}
  };
- const NEED={Users:'ban',Chat:'delete_messages',Apps:'delete_apps',Announce:'announce',Settings:'site_settings',Log:'view_audit',Roles:'manage_roles',Emojis:'manage_emojis',Channels:'manage_channels',Stats:'admin_panel'};
+ const NEED={Users:'ban',Chat:'delete_messages',Apps:'delete_apps',Announce:'announce',Settings:'site_settings',Log:'view_audit',Roles:'manage_roles',Emojis:'manage_emojis',Channels:'manage_channels',Stats:'admin_panel',Notify:'notify'};
  const keys=Object.keys(T).filter(k=>can(NEED[k])||(k==='Users'&&can('manage_roles')));
  keys.forEach(k=>bar.append(h('button',{on:{click:()=>{pane.textContent='Loading...';T[k]()}}},k)));
  b.append(bar,pane);T[keys[0]]();
@@ -662,7 +725,10 @@ function settings(b){
  const s=store.get('set',{wp:'Grape',scan:true}),save=()=>{store.set('set',s);applySettings()};
  const wp=h('select',{},...Object.keys(WP).map(k=>h('option',{value:k,selected:k===s.wp},k))),sc=h('input',{type:'checkbox',checked:s.scan});
  wp.onchange=()=>{s.wp=wp.value;save()};sc.onchange=()=>{s.scan=sc.checked;save()};
- b.append(h('div',{className:'row'},'Wallpaper ',wp),h('div',{className:'row'},sc,' CRT scanlines'),h('div',{className:'row'},h('button',{on:{click:()=>{store.set('apps',[]);desk();toast('Desktop apps removed')}}},'Remove all installed apps')));
+ const sn=SN(),ss=()=>store.set('snd',sn),son=h('input',{type:'checkbox',checked:sn.on}),vol=h('input',{type:'range',min:0,max:1,step:.05,value:sn.vol}),dk=h('input',{type:'checkbox',checked:sn.desk});
+ son.onchange=()=>{sn.on=son.checked;ss()};vol.onchange=()=>{sn.vol=+vol.value;ss();snd('dm')};
+ dk.onchange=async()=>{if(dk.checked&&window.Notification&&Notification.permission!=='granted'&&await Notification.requestPermission()!=='granted'){dk.checked=false;toast('Notifications blocked in browser')}sn.desk=dk.checked;ss()};
+ b.append(h('div',{className:'row'},son,' Sounds ',vol,h('button',{on:{click:()=>snd('note')}},'Test')),h('div',{className:'row'},dk,' Desktop notifications when tab is hidden'),h('div',{className:'row'},'Wallpaper ',wp),h('div',{className:'row'},sc,' CRT scanlines'),h('div',{className:'row'},h('button',{on:{click:()=>{store.set('apps',[]);desk();toast('Desktop apps removed')}}},'Remove all installed apps')));
 }
 async function loadAnn(){const a=$('#ann'),d=$('#desk');a.style.display='none';d.style.top='0';if(!sb)return;
  const r=(await sb.from('announcements').select('*').order('created_at',{ascending:false}).limit(1)).data?.[0];if(!r||store.get('annx')===r.id)return;
@@ -681,7 +747,7 @@ async function online(b,w){
    ...u.map(x=>h('div',{className:'row'},av(x)?h('img',{src:av(x),width:20,height:20,style:'vertical-align:middle;margin-right:6px;object-fit:cover'}):'',h('b',{style:'color:'+rc(x.role)+';cursor:pointer',on:{click:()=>openProfile(x)}},dn(x)),badge(x.role),h('small',{style:'opacity:.6'},' @'+x.login))))};
  w.draw=draw;draw();
 }
-const APPS=[['weather','Weather','☁',weather],['rss','News','📰',rss],['radio','Radio','📻',radio,360,420],['chat','Global Chat','💬',chat,400,440],['voice','Voice','🎙',voice,480,540],['profile','My Profile','🪪',profileApp,360,470],['online',"Who's Online",'🟢',online,320,380],['shop','Workshop','🛠',shop,460,520],['builder','App Builder','🧱',builder,500,540],['calc','Calculator','🧮',calc,270,340],['paint','Paint','🎨',paint,430,420],['snake','Snake','🐍',snake,350,400],['term','Terminal','⌨',term,420,300],['notes','Notepad','📝',notes,340,300],['settings','Settings','⚙',settings,340,220],['admin','Admin','🛡',admin,540,480],['about','About','💾',about,340,220],['bin','Recycle Bin','🗑',binApp,380,340]];
+const APPS=[['weather','Weather','☁',weather],['rss','News','📰',rss],['radio','Radio','📻',radio,360,420],['chat','Global Chat','💬',chat,400,440],['voice','Voice','🎙',voice,480,540],['profile','My Profile','🪪',profileApp,360,470],['online',"Who's Online",'🟢',online,320,380],['shop','Workshop','🛠',shop,460,520],['builder','App Builder','🧱',builder,500,540],['calc','Calculator','🧮',calc,270,340],['paint','Paint','🎨',paint,430,420],['snake','Snake','🐍',snake,350,400],['term','Terminal','⌨',term,420,300],['notes','Notepad','📝',notes,340,300],['dm','Messages','💌',dmApp,520,420],['settings','Settings','⚙',settings,340,220],['admin','Admin','🛡',admin,540,480],['about','About','💾',about,340,220],['bin','Recycle Bin','🗑',binApp,380,340]];
 function lp(el,fn){let t,sx,sy;const c=()=>clearTimeout(t);
  el.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse')return;sx=e.clientX;sy=e.clientY;el._lp=0;const tg=e.target;t=setTimeout(()=>{el._lp=1;fn({clientX:sx,clientY:sy,target:tg,preventDefault(){},stopPropagation(){}})},500)});
  el.addEventListener('pointermove',e=>{if(Math.abs(e.clientX-sx)>10||Math.abs(e.clientY-sy)>10)c()});el.addEventListener('pointerup',c);el.addEventListener('pointercancel',c);
@@ -720,7 +786,7 @@ addEventListener('pointerdown',e=>{if(!e.target.closest('#ctx'))$('#ctx').classL
 addEventListener('keydown',e=>e.key==='Escape'&&$('#ctx').classList.remove('on'));
 addEventListener('contextmenu',e=>{if(!e.target.closest('input,textarea'))e.preventDefault()});
 function tray(){
- const t=$('#tray');t.replaceChildren(nowp?h('span',{},'♪ '+nowp.slice(0,18)+' '):'',VC?h('button',{on:{click:()=>openApp('voice')}},'🎙 '+VC.name):'',Object.keys(onl).length?h('button',{on:{click:()=>openApp('online')}},'● '+Object.keys(onl).length):'',me?h('button',{on:{click:async()=>{await sb.auth.signOut()}}},`${dn(me)} [${me.role}] - log out`):h('button',{on:{click:login}},'Log in with GitHub'),' ',h('span',{id:'clk'}));clock()}
+ const t=$('#tray');t.replaceChildren(nowp?h('span',{},'♪ '+nowp.slice(0,18)+' '):'',VC?h('button',{on:{click:()=>openApp('voice')}},'🎙 '+VC.name):'',Object.keys(onl).length?h('button',{on:{click:()=>openApp('online')}},'● '+Object.keys(onl).length):'',me&&unreadTotal()?h('button',{on:{click:()=>openApp('dm')}},'💌 '+unreadTotal()):'',me?h('button',{on:{click:async()=>{await sb.auth.signOut()}}},`${dn(me)} [${me.role}] - log out`):h('button',{on:{click:login}},'Log in with GitHub'),' ',h('span',{id:'clk'}));clock()}
 const clock=()=>{const c=$('#clk');if(c)c.textContent=new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})};
 async function loadMe(){
   voiceLeave();
@@ -743,13 +809,22 @@ async function loadMe(){
     await loadPermissions();
   }
 
+  curUid=me?.id||null;
+  startNotify();
   presence();
   desk();
   tray();
 }
 $('#start').onclick=()=>$('#menu').classList.toggle('on');
 $('#desk').onclick=()=>$('#menu').classList.remove('on');
-sb?.auth.onAuthStateChange(()=>setTimeout(loadMe,0));
+/* supabase re-fires SIGNED_IN (and refreshes tokens) whenever the tab regains focus.
+   Reloading on those would call voiceLeave(), so only reload when the user actually changed. */
+let curUid=null;
+sb?.auth.onAuthStateChange((ev,session)=>{
+  if(ev==='TOKEN_REFRESHED')return;
+  const uid=session?.user?.id||null;
+  if((ev==='SIGNED_IN'||ev==='INITIAL_SESSION')&&me&&uid===curUid)return;
+  setTimeout(loadMe,0)});
 $('#ver').append(Object.assign(document.createElement('span'),{className:'vf',textContent:`Client ${VER.client} | Server ${VER.server}`}),Object.assign(document.createElement('span'),{className:'vs',textContent:`C${VER.client} S${VER.server}`}));$('#ver').title=`Client version ${VER.client}, server version ${VER.server}`;
 applySettings();loadMe();loadAnn();setInterval(clock,20000);
 </script></body></html>
