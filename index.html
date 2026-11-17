@@ -19,7 +19,7 @@ html,body{overscroll-behavior:none}body{touch-action:manipulation;-webkit-tap-hi
 .w.hide{display:none}.w.drag iframe{pointer-events:none}
 .tb{background:linear-gradient(90deg,var(--pink),#7a3fd1);color:#fff;padding:2px 0.375rem;display:flex;justify-content:space-between;align-items:center;cursor:move;touch-action:none}
 .tb button{width:1.5rem;padding:0;margin-left:0.1875rem}
-.body{flex:1;overflow:auto;padding:0.5rem;user-select:text}
+.body{flex:1;overflow:auto;padding:0.5rem;user-select:none}
 button,input,select,textarea{font:inherit;color:var(--ink)}
 button{background:var(--win);border:2px solid;border-color:var(--hi) var(--lo) var(--lo) var(--hi);cursor:pointer;padding:1px 0.625rem}
 button:active{border-color:var(--lo) var(--hi) var(--hi) var(--lo)}
@@ -38,6 +38,8 @@ textarea{width:100%;font-family:monospace;font-size:0.875rem}
 #toast{position:fixed;top:0.625rem;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--mint);padding:0.25rem 0.75rem;z-index:10000;display:none}
 #ann{position:absolute;top:0;left:0;right:0;background:var(--pink);color:#fff;padding:0.25rem 0.625rem;z-index:8000;display:none}
 body.noscan::after{display:none}
+*{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}input,textarea{-webkit-user-select:text;user-select:text}
+img{-webkit-user-drag:none}.ic{position:absolute;touch-action:none}.ic.dragging{opacity:.75;z-index:60;cursor:grabbing}
 #credit{color:var(--ink);font-size:1.0625rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto;max-width:36vw}
 .body a{color:#5b1fb5}
 #ver{color:var(--ink);font-size:1rem;white-space:nowrap;flex:0 0 auto}#ver .vs{display:none}
@@ -63,7 +65,7 @@ body.noscan::after{display:none}
 const CFG={url:'https://cyjyuvrarekwlefxcqui.supabase.co',key:'sb_publishable_E2_jmyi7lsaceSdaVGeQAg_FvsDUTpb'};
 /* ================================================================= */
 const $=s=>document.querySelector(s);
-const VER={client:'8.0.0(Core)',server:'34.0.0'};
+const VER={client:'8.1.0(Core)',server:'34.1.0'};
 const h=(t,p,...k)=>{const e=document.createElement(t);for(const x in p||{}){if(x==='on')for(const y in p.on)e.addEventListener(y,p.on[y]);else if(x in e)e[x]=p[x];else e.setAttribute(x,p[x])}k.flat().forEach(c=>e.append(c));return e};
 const store={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
 const toast=m=>{const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.display='none',2500)};
@@ -189,7 +191,9 @@ function radio(b){
  q.onkeydown=e=>{if(e.key==='Enter')go()};
  b.append(h('div',{className:'bar'},q,h('button',{on:{click:go}},'Search'),h('button',{on:{click:()=>{au.pause();nowp='';tray()}}},'Stop')),out);go();
 }
-function notes(b){const t=h('textarea',{rows:14,value:store.get('notes','')});t.oninput=()=>store.set('notes',t.value);b.append(t)}
+function notes(b){const t=h('textarea',{rows:14,value:store.get('notes','')});t.oninput=()=>store.set('notes',t.value);
+ b.append(h('div',{className:'bar'},h('button',{on:{click:()=>{const n=askName('note','.txt');if(n)addFile('note',n,t.value)}}},'💾 Desktop'),
+  h('button',{on:{click:()=>sendDialog({id:'notepad',kind:'note',name:'note.txt',data:t.value})}},'📤 Send')),t)}
 const EMO='😀 😂 🤣 😊 😍 😎 😭 😡 👍 👎 🙏 👏 🔥 💯 ✨ 💀 🎉 ❤️ 💔 🤔 🙄 😴 🤯 🥳 😱 🤝 👀 💩 🍕 🍔 ☕ 🎮 🎵 🐱 🐶 🌈 ⭐ ⚡'.split(' ');
 const CHATIMG=/^https:\/\/[^/]+\/storage\/v1\/object\/public\/chat-images\//,IMGEXT={'image/png':'png','image/jpeg':'jpg','image/gif':'gif','image/webp':'webp'};
 const rich=t=>t.split(/(:[a-z0-9_]{2,24}:)/).map(x=>{const m=/^:(.+):$/.exec(x),u=m&&E[m[1]];return u?h('img',{src:u,title:x,style:'height:1.3em;vertical-align:middle'}):x});
@@ -240,7 +244,7 @@ if(me&&(can('delete_messages')||me.id===m.user_id))
     }
   },'x'));
 
-  list.append(r);list.scrollTop=1e9};
+  r.append(attOf(m));list.append(r);list.scrollTop=1e9};
  const load=async()=>{list.replaceChildren();((await sb.from('messages').select('*').eq('channel_id',cur).order('created_at',{ascending:false}).limit(50)).data||[]).reverse().forEach(add)};
  csel.onchange=()=>{cur=+csel.value;store.set('ch',cur);gate();load()};
  const mk=can('create_channels')?h('button',{on:{click:async()=>{const n=(prompt('Channel name (a-z, 0-9, -)')||'').trim().toLowerCase();if(!n)return;if(!/^[a-z0-9-]{1,24}$/.test(n))return toast('Use a-z, 0-9 and - (24 max)');
@@ -374,7 +378,7 @@ async function dmApp(b,w){
  b.style.cssText+=';display:flex;padding:0.25rem';b.append(list,pane);
  if(!Object.keys(E).length)((await sb.from('emojis').select('name,url')).data||[]).forEach(x=>{if(/^https:\/\//.test(x.url))E[x.name]=x.url});
  const prof=async id=>P[id]||(P[id]=(await sb.from('profiles').select(PCOLS).eq('id',id).maybeSingle()).data);
- const bubble=m=>h('div',{className:'msg',id:'d'+m.id,style:m.sender_id===me.id?'text-align:right':''},h('small',{style:'opacity:.6'},new Date(m.created_at).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})+' '),colSpan(m.sender_id,rich(m.body)));
+ const bubble=m=>h('div',{className:'msg',id:'d'+m.id,style:m.sender_id===me.id?'text-align:right':''},h('small',{style:'opacity:.6'},new Date(m.created_at).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})+' '),colSpan(m.sender_id,rich(m.body)),attOf(m));
  w.draw=async()=>{const rows=(await sb.from('dms').select('sender_id,recipient_id,body,created_at').or(`sender_id.eq.${me.id},recipient_id.eq.${me.id}`).order('created_at',{ascending:false}).limit(200)).data||[];
   last={};rows.forEach(r=>{const o=r.sender_id===me.id?r.recipient_id:r.sender_id;last[o]??=r});
   const ids=Object.keys({...last,...dmUnread});await Promise.all(ids.map(prof));
@@ -848,7 +852,7 @@ function paint(b){
  c.onpointerdown=e=>{on=true;x.beginPath();x.moveTo(...pos(e))};
  c.onpointermove=e=>{if(!on)return;x.strokeStyle=col.value;x.lineWidth=sz.value;x.lineCap='round';x.lineTo(...pos(e));x.stroke()};
  c.onpointerup=c.onpointerleave=()=>{on=false};
- b.append(h('div',{className:'bar'},col,sz,h('button',{on:{click:wipe}},'Clear'),h('button',{on:{click:()=>h('a',{href:c.toDataURL(),download:'paint.png'}).click()}},'Save PNG')),c);
+ b.append(h('div',{className:'bar'},col,sz,h('button',{on:{click:wipe}},'Clear'),h('button',{on:{click:()=>h('a',{href:c.toDataURL(),download:'paint.png'}).click()}},'Save PNG'),h('button',{on:{click:()=>{const n=askName('picture','.png');if(n)addFile('img',n,c.toDataURL('image/png'))}}},'💾 Desktop'),h('button',{on:{click:()=>sendDialog({id:'paint',kind:'img',name:'paint.png',data:c.toDataURL('image/png')})}},'📤 Send')),c);
 }
 function snake(b,w){
  const N=16,c=h('canvas',{width:320,height:320,style:'display:block;margin:auto;max-width:100%'}),x=c.getContext('2d'),sc=h('div',{},'Arrow keys or WASD. Score: 0');
@@ -1009,6 +1013,55 @@ function repExtra(r,back){
   if(paths.length)sb.storage.from('report-images').remove(paths);aud('report #'+r.id+' deleted');toast('Report deleted');repChanged();back()}}},'🗑 Delete report');
  draw();return h('div',{},box,h('div',{className:'bar'},inp,h('button',{on:{click:add}},'Add user')),h('div',{className:'bar'},del))}
 /* ---- group chats ---- */
+/* ---- desktop files (saved on this device) ---- */
+const FILES=()=>store.get('files',[]),saveFiles=l=>store.set('files',l);
+const askName=(d,ext)=>{let n=(prompt('File name',d)||'').trim().replace(/[^A-Za-z0-9 ._-]/g,'').slice(0,24);if(!n)return '';return n.toLowerCase().endsWith(ext)?n:n+ext};
+function addFile(k,name,data){const l=FILES();l.push({id:Date.now()+Math.random().toString(36).slice(2,5),k,name,data});saveFiles(l);
+ if(FILES().length!==l.length)return toast('Out of storage space. Delete some files first.');desk();toast('Saved to desktop: '+name)}
+function dlFile(f){if(!f)return;const href=f.k==='img'?f.data:URL.createObjectURL(new Blob([f.data],{type:'text/plain'}));h('a',{href,download:f.name}).click()}
+function renameFile(id){const l=FILES(),f=l.find(x=>x.id===id);if(!f)return;const n=askName(f.name,f.k==='img'?'.png':'.txt');if(!n)return;f.name=n;saveFiles(l);desk()}
+function delFile(id){const f=FILES().find(x=>x.id===id);if(!f||!confirm('Delete '+f.name+'? This cannot be undone.'))return;saveFiles(FILES().filter(x=>x.id!==id));
+ const w=wins['f'+id];if(w)w.el.querySelectorAll('.tb button')[1].click();desk()}
+function openFile(id){const f=FILES().find(x=>x.id===id);if(!f)return;win('f'+id,f.name,f.k==='img'?'🖼':'📄',b=>f.k==='img'?imgViewer(b,id):noteEditor(b,id),400,f.k==='img'?380:340)}
+function noteEditor(b,id){const get=()=>FILES().find(x=>x.id===id),f=get();if(!f)return b.append('File missing.');
+ const t=h('textarea',{rows:12,value:f.data});t.oninput=()=>{const l=FILES(),x=l.find(y=>y.id===id);if(x){x.data=t.value;saveFiles(l)}};
+ b.append(h('div',{className:'bar'},h('button',{on:{click:()=>sendDialog({id,kind:'note',name:get().name,data:t.value})}},'📤 Send'),h('button',{on:{click:()=>dlFile({k:'note',name:get().name,data:t.value})}},'Download')),t)}
+function imgViewer(b,id){const f=FILES().find(x=>x.id===id);if(!f)return b.append('File missing.');
+ b.append(h('div',{className:'bar'},h('button',{on:{click:()=>sendDialog({id,kind:'img',name:f.name,data:f.data})}},'📤 Send'),h('button',{on:{click:()=>dlFile(f)}},'Download')),
+  h('img',{src:f.data,style:'max-width:100%;display:block;margin:auto;border:2px solid var(--ink);background:#fff'}))}
+/* attachments in chat messages */
+const attSigned=(path,cb)=>sb.storage.from('attachments').createSignedUrl(path,3600).then(({data})=>cb(data?.signedUrl||null));
+function attOf(m){
+ if(m.image_url&&!/^https?:/.test(m.image_url)){const im=h('img',{style:'max-width:100%;max-height:13.75rem;display:block;cursor:zoom-in'});
+  attSigned(m.image_url,u=>{if(u){im.src=u;im.onclick=()=>window.open(u,'_blank','noopener')}else im.replaceWith('[image unavailable]')});return im}
+ if(m.file_url){const a=h('button',{},'📄 Open '+(m.file_name||'file'));a.onclick=()=>attSigned(m.file_url,u=>u?window.open(u,'_blank','noopener'):toast('File unavailable'));return h('div',{},a)}
+ return ''}
+async function deliver(f,k,t){
+ const img=f.kind==='img',label=(img?'🖼 ':'📄 ')+f.name;
+ let blob;if(img)blob=await (await fetch(f.data)).blob();else blob=new Blob([f.data],{type:'text/plain'});
+ if(blob.size>(img?3e6:2e5))return img?'Image is over 3 MB':'Note is over 200 KB';
+ const pub=k==='g'&&img;if(pub&&!can('images'))return 'You do not have permission to upload images';
+ const bucket=pub?'chat-images':'attachments',path=me.id+'/'+Date.now()+'-'+Math.random().toString(36).slice(2,8)+'.'+(img?'png':'txt');
+ const up=await sb.storage.from(bucket).upload(path,blob,{contentType:img?'image/png':'text/plain'});if(up.error)return up.error.message;
+ const url=pub?sb.storage.from(bucket).getPublicUrl(path).data.publicUrl:path,att=img?{image_url:url}:{file_url:url,file_name:f.name};
+ if(k==='g'){const{error}=await sb.from('messages').insert({user_id:me.id,login:me.login,body:label,channel_id:t.ch,...att});return error?error.message:null}
+ if(k==='d'){const u=(await sb.from('profiles').select('id').ilike('login',t.login||'-').maybeSingle()).data;if(!u)return 'No user @'+t.login;if(u.id===me.id)return "That's you";
+  const{error}=await sb.from('dms').insert({sender_id:me.id,recipient_id:u.id,body:label,...att});wins.dm?.draw?.();return error?error.message:null}
+ const{error}=await sb.from('chat_group_messages').insert({group_id:t.grp,user_id:me.id,login:me.login,body:label,...att});return error?error.message:null}
+function sendDialog(f){if(!sb||!me)return toast('Log in to send files');
+ win('send-'+f.id+'-'+f.kind,'Send '+f.name,'📤',(b,w)=>{
+  const kind=h('select',{},h('option',{value:'g'},'Global chat'),h('option',{value:'d'},'Direct message'),h('option',{value:'r'},'Group chat')),opts=h('div',{style:'margin:0.375rem 0'}),go=h('button',{},'Send');let tgt=null;
+  const setup=async()=>{opts.textContent='Loading...';go.disabled=true;tgt=null;
+   if(kind.value==='g'){const chs=((await sb.from('channels').select('*').order('id')).data||[]).filter(canPost);if(!chs.length){opts.textContent='You cannot post in any channel.';return}
+    const s=h('select',{},...chs.map(c=>h('option',{value:c.id},'# '+c.name)));opts.replaceChildren(s);tgt=()=>({ch:+s.value})}
+   else if(kind.value==='d'){const i=h('input',{placeholder:'@login',maxLength:40,style:'width:100%'});opts.replaceChildren(i);tgt=()=>({login:i.value.trim().replace(/^@/,'')})}
+   else{const gs=(await sb.from('chat_groups').select('id,name').order('created_at')).data||[];if(!gs.length){opts.textContent='You are not in any groups.';return}
+    const s=h('select',{},...gs.map(g=>h('option',{value:g.id},'👥 '+g.name)));opts.replaceChildren(s);tgt=()=>({grp:+s.value})}
+   go.disabled=false};
+  kind.onchange=setup;
+  go.onclick=async()=>{if(!tgt)return;go.disabled=true;let err;try{err=await deliver(f,kind.value,tgt())}catch(e){err='Send failed'}go.disabled=false;
+   if(err)return toast(err);toast('Sent!');w.el.querySelectorAll('.tb button')[1].click()};
+  b.append(h('div',{},(f.kind==='img'?'🖼 ':'📄 ')+f.name),h('div',{style:'margin-top:0.375rem'},'Send to'),kind,opts,go);setup()},360,240)}
 let GRC=null,GUNREAD={};
 const grpChanged=d=>document.dispatchEvent(new CustomEvent('grp-change',{detail:d}));
 function grpStart(){if(GRC){sb.removeChannel(GRC);GRC=null}GUNREAD={};if(!sb||!me)return;
@@ -1036,7 +1089,7 @@ async function groupsApp(b,w){
   const r=await sb.from('chat_group_members').insert({group_id:data.id,user_id:me.id});if(r.error)return toast(r.error.message);await drawList();open(data)};
  const open=async g=>{cur=g;w.cur=g.id;delete GUNREAD[g.id];const mine=g.owner_id===me.id;
   const msgs=h('div',{style:'flex:1;overflow:auto;background:#fff;border:2px solid;border-color:var(--lo) var(--hi) var(--hi) var(--lo);padding:0.1875rem'}),inp=h('input',{maxLength:500,placeholder:'Message '+g.name,style:'flex:1',disabled:!can('chat')});
-  const line=m=>{const p=P[m.user_id]||{login:m.login,role:'user'},r=h('div',{className:'msg',id:'gm'+m.id},h('b',{style:'color:'+rc(p.role)},dn(p)),': ',colSpan(m.user_id,rich(m.body)));
+  const line=m=>{const p=P[m.user_id]||{login:m.login,role:'user'},r=h('div',{className:'msg',id:'gm'+m.id},h('b',{style:'color:'+rc(p.role)},dn(p)),': ',colSpan(m.user_id,rich(m.body)),attOf(m));
    if(m.user_id===me.id||mine)r.append(' ',h('button',{on:{click:async()=>{const{error}=await sb.from('chat_group_messages').delete().eq('id',m.id);if(error)toast(error.message);else r.remove()}}},'x'));return r};
   const send=async()=>{const body=inp.value.trim();if(!body)return;inp.value='';const{error}=await sb.from('chat_group_messages').insert({group_id:g.id,user_id:me.id,login:me.login,body});if(error){inp.value=body;toast(error.message)}};
   inp.onkeydown=e=>{if(e.key==='Enter')send()};
@@ -1102,13 +1155,39 @@ function desk(){
  const d=$('#desk'),m=$('#menu'),B=bin();d.replaceChildren();m.replaceChildren();
  const hid=B.filter(x=>x.k==='sys').map(x=>x.id);
  const items=[
-  ...APPS.filter(a=>(a[0]!=='admin'||staff())&&(a[0]!=='powers'||hasPowers())&&!hid.includes(a[0])).map(a=>({bin:a[0]==='bin',i:a[2],n:a[0]==='bin'&&B.length?`Recycle Bin (${B.length})`:a[1],f:()=>win(a[0],a[1],a[2],a[3],a[4],a[5]),del:a[0]==='bin'?null:()=>trash({k:'sys',id:a[0],n:a[1],i:a[2]})})),
-  ...store.get('apps',[]).map(a=>({i:a.icon,n:a.name,f:()=>runApp(a),del:()=>{store.set('apps',store.get('apps',[]).filter(x=>x.id!==a.id));trash({k:'usr',id:a.id,n:a.name,i:a.icon,app:a})}}))];
+  ...APPS.filter(a=>(a[0]!=='admin'||staff())&&(a[0]!=='powers'||hasPowers())&&!hid.includes(a[0])).map(a=>({key:'a:'+a[0],bin:a[0]==='bin',i:a[2],n:a[0]==='bin'&&B.length?'Recycle Bin ('+B.length+')':a[1],f:()=>win(a[0],a[1],a[2],a[3],a[4],a[5]),del:a[0]==='bin'?null:()=>trash({k:'sys',id:a[0],n:a[1],i:a[2]})})),
+  ...store.get('apps',[]).map(a=>({key:'u:'+a.id,i:a.icon,n:a.name,f:()=>runApp(a),del:()=>{store.set('apps',store.get('apps',[]).filter(x=>x.id!==a.id));trash({k:'usr',id:a.id,n:a.name,i:a.icon,app:a})}})),
+  ...FILES().map(f=>({key:'f:'+f.id,i:f.k==='img'?'🖼':'📄',n:f.name,f:()=>openFile(f.id),
+   x:[['Send...',()=>{const g=FILES().find(y=>y.id===f.id);if(g)sendDialog({id:g.id,kind:g.k,name:g.name,data:g.data})}],['Rename',()=>renameFile(f.id)],['Download',()=>dlFile(FILES().find(y=>y.id===f.id)||f)]],del:()=>delFile(f.id)}))];
  const bi=items.findIndex(x=>x.bin);if(bi>-1)items.push(items.splice(bi,1)[0]);
- items.forEach(x=>{const mi=e=>{e.stopPropagation();menu(e,[['Open',x.f],...(x.del?[['-'],['Delete',x.del]]:[])])};const bt=h('button',{className:'ic',on:{dblclick:x.f,keydown:e=>e.key==='Enter'&&x.f(),click:e=>matchMedia('(pointer:coarse)').matches&&x.f(),contextmenu:mi}},h('i',{},x.i),x.n);lp(bt,mi);d.append(bt);
+ /* grid maths: every icon sits in a cell; saved cells are kept, new icons take the next free cell */
+ const cs=getComputedStyle(d),rem=parseFloat(getComputedStyle(document.documentElement).fontSize),mob=innerWidth<=600,
+  iw=(mob?4.75:5.25)*rem,ih=5.75*rem,cw=iw+.375*rem,chh=ih+.375*rem,pl=parseFloat(cs.paddingLeft)||0,pt=parseFloat(cs.paddingTop)||0,
+  cols=Math.max(1,Math.floor((d.clientWidth-2*pl+.375*rem)/cw)),rows=Math.max(1,Math.floor((d.clientHeight-pt-pl+.375*rem)/chh)),
+  pos=store.get('pos',{}),used=new Set(),cell={},ck=(c,r)=>c+','+r;
+ items.forEach(x=>{const p=pos[x.key];if(p&&p.c>=0&&p.r>=0&&p.c<cols&&p.r<rows&&!used.has(ck(p.c,p.r))){cell[x.key]={c:p.c,r:p.r};used.add(ck(p.c,p.r))}});
+ let ac=0,ar=0;const nextFree=()=>{while(used.has(ck(ac,ar))){ac++;if(ac>=cols){ac=0;ar++}}const p={c:ac,r:ar};used.add(ck(ac,ar));return p};
+ items.forEach(x=>{if(!cell[x.key])cell[x.key]=nextFree()});
+ function moveIcon(bt,key){
+  bt.addEventListener('pointerdown',e=>{if(e.button>0)return;const sx=e.clientX,sy=e.clientY,ox=bt.offsetLeft,oy=bt.offsetTop;let mv=false;
+   const move=q=>{const dx=q.clientX-sx,dy=q.clientY-sy;if(!mv){if(Math.hypot(dx,dy)<6)return;mv=true;bt.classList.add('dragging')}
+    bt.style.left=Math.max(0,Math.min(ox+dx,d.clientWidth-iw))+'px';bt.style.top=Math.max(0,Math.min(oy+dy,d.clientHeight-ih))+'px'};
+   const up=()=>{removeEventListener('pointermove',move);removeEventListener('pointerup',up);removeEventListener('pointercancel',up);if(!mv)return;
+    bt._mv=1;setTimeout(()=>{bt._mv=0},80);bt.classList.remove('dragging');
+    let c=Math.max(0,Math.min(cols-1,Math.round((bt.offsetLeft-pl)/cw))),r=Math.max(0,Math.min(rows-1,Math.round((bt.offsetTop-pt)/chh)));
+    const taken=new Set(Object.entries(cell).filter(([k])=>k!==key).map(([,p])=>ck(p.c,p.r)));
+    if(taken.has(ck(c,r))){let best=null,bd=1e9;for(let rr=0;rr<rows;rr++)for(let cc=0;cc<cols;cc++)if(!taken.has(ck(cc,rr))){const dd=(cc-c)*(cc-c)+(rr-r)*(rr-r);if(dd<bd){bd=dd;best=[cc,rr]}}if(!best)return desk();c=best[0];r=best[1]}
+    const P=store.get('pos',{});Object.entries(cell).forEach(([k,p])=>{P[k]=p});P[key]={c,r};store.set('pos',P);desk()};
+   addEventListener('pointermove',move);addEventListener('pointerup',up);addEventListener('pointercancel',up)});
+  bt.addEventListener('click',e=>{if(bt._mv){bt._mv=0;e.stopImmediatePropagation();e.preventDefault()}},true)}
+ items.forEach(x=>{const mi=e=>{e.stopPropagation();menu(e,[['Open',x.f],...(x.x||[]),...(x.del?[['-'],['Delete',x.del]]:[])])};
+  const bt=h('button',{className:'ic',style:'left:'+(pl+cell[x.key].c*cw)+'px;top:'+(pt+cell[x.key].r*chh)+'px;width:'+iw+'px;height:'+ih+'px',on:{dblclick:x.f,keydown:e=>e.key==='Enter'&&x.f(),click:e=>matchMedia('(pointer:coarse)').matches&&x.f(),contextmenu:mi}},h('i',{},x.i),x.n);
+  lp(bt,mi);moveIcon(bt,x.key);d.append(bt);
   m.append(h('button',{on:{click:()=>{x.f();m.classList.remove('on')}}},x.i+' '+x.n))});
 }
-const deskMenu=e=>menu(e,[['Refresh',()=>{desk();loadAnn()}],['New app...',()=>openApp('builder')],
+let _dt;addEventListener('resize',()=>{clearTimeout(_dt);_dt=setTimeout(desk,200)});
+addEventListener('dragstart',e=>e.preventDefault());
+const deskMenu=e=>menu(e,[['Refresh',()=>{desk();loadAnn()}],['Reset icon positions',()=>{store.set('pos',{});desk()}],['New app...',()=>openApp('builder')],
  ['Next wallpaper',()=>{const k=Object.keys(WP),t=store.get('set',{wp:'Grape',scan:true});t.wp=k[(k.indexOf(t.wp)+1)%k.length];store.set('set',t);applySettings()}],
  ['Toggle CRT scanlines',()=>{const t=store.get('set',{wp:'Grape',scan:true});t.scan=!t.scan;store.set('set',t);applySettings()}],
  ['-'],['Recycle Bin',()=>openApp('bin')],['Settings',()=>openApp('settings')]]);
