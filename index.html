@@ -12,7 +12,7 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:9999;b
 html,body{overscroll-behavior:none}body{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 #desk{position:absolute;inset:0 0 calc(40px + env(safe-area-inset-bottom,0px));padding:12px;display:grid;grid-template-columns:repeat(auto-fill,84px);grid-auto-rows:92px;gap:6px;align-content:start}
 .ic{background:none;border:0;color:var(--hi);font:inherit;text-align:center;cursor:pointer;padding:4px}
-.ic i{display:block;font-style:normal;font-size:34px}
+.ic i{display:block;font-style:normal;font-size:34px}AC
 .ic:hover,.ic:focus-visible{background:rgba(255,79,163,.3);outline:1px dotted var(--mint)}
 .w{position:absolute;display:flex;flex-direction:column;background:var(--win);border:2px solid;border-color:var(--hi) var(--ink) var(--ink) var(--hi);box-shadow:5px 5px 0 rgba(0,0,0,.4);resize:both;overflow:hidden;min-width:240px;min-height:160px;max-width:100vw}
 .w.hide{display:none}.w.drag iframe{pointer-events:none}
@@ -68,10 +68,11 @@ const toast=m=>{const t=$('#toast');t.textContent=m;t.style.display='block';clea
 const sb=CFG.url&&window.supabase?supabase.createClient(CFG.url,CFG.key):null;
 let me=null,R={},E={};
 let grantedPerms=new Set();
+let myRoleNames=[];
 
 /* Permission checks are fetched from the database via public.has_perm(text).
    Keep can() synchronous so the existing interface can use it everywhere. */
-const can=p=>!!me&&(me.role==='owner'||grantedPerms.has(p));
+const can=p=>!!me&&grantedPerms.has(p);
 
 async function loadPermissions(){
   grantedPerms.clear();
@@ -89,15 +90,25 @@ async function loadPermissions(){
 
   grantedPerms=new Set(results.filter(Boolean));
 }
-const rc=n=>R[n]?.color||'inherit',mypos=()=>R[me?.role]?.pos??99999,staff=()=>can('admin_panel');
+const rc=n=>R[n]?.color||'inherit';
+const mypos=()=>Math.min(...(myRoleNames.length?myRoleNames.map(n=>R[n]?.pos??99999):[R[me?.role]?.pos??99999]));
+const userPos=(id,roleNames)=>Math.min(...((roleNames||[]).length?roleNames.map(n=>R[n]?.pos??99999):[R[id]?.pos??99999]));
+const staff=()=>can('admin_panel');
 async function loadRoles(){R={};((await sb.from('roles').select('*')).data||[]).forEach(r=>R[r.name]=r)}
+async function loadMyRoles(){
+  myRoleNames=[];
+  if(!me||!sb)return;
+  const{data,error}=await sb.from('profile_roles').select('role_name').eq('user_id',me.id);
+  if(error){console.error('Could not load assigned roles:',error);return}
+  myRoleNames=(data||[]).map(x=>x.role_name);
+}
 const PCOLS='id,login,display_name,bio,avatar,custom_avatar,role,created_at',dn=p=>p.display_name||p.login;
 const AVOK=/^https:\/\/(avatars\.githubusercontent\.com\/|[^/]+\/storage\/v1\/object\/public\/avatars\/)/,av=p=>[p.custom_avatar,p.avatar].find(u=>AVOK.test(u||''));
 const ink=c=>{const n=parseInt((c||'').slice(1),16),l=((n>>16)*299+((n>>8)&255)*587+(n&255)*114)/1000;return l>140?'#1a1033':'#fff'};
 const badge=r=>h('span',{style:`background:${rc(r)};color:${ink(rc(r))};font-size:15px;padding:0 5px;margin-left:4px;border:1px solid var(--ink)`},r);
 function openProfile(p){win('p'+p.id,dn(p),'🪪',b=>{const a=av(p);
  b.append(h('div',{style:'text-align:center'},a?h('img',{src:a,width:96,height:96,style:'border:2px solid var(--ink);object-fit:cover'}):h('div',{className:'big'},'🪪'),h('h2',{style:'margin:6px 0 0'},dn(p)),
-  h('div',{},h('a',{href:'https://github.com/'+encodeURIComponent(p.login),target:'_blank',rel:'noopener noreferrer'},'@'+p.login),badge(p.role))),
+  h('div',{},h('a',{href:'https://github.com/'+encodeURIComponent(p.login),target:'_blank',rel:'noopener noreferrer'},'@'+p.login),badge(p.role),...(p.id===me?.id?myRoleNames:[]).filter(n=>n!==p.role).map(badge))),
   h('p',{style:'white-space:pre-wrap'},p.bio||'No description yet.'),h('div',{style:'opacity:.7'},p.created_at?'Joined '+new Date(p.created_at).toLocaleDateString():''))},340,380)}
 async function profileApp(b){
  if(!sb)return noBack(b);if(!me)return needLogin(b);
@@ -109,7 +120,7 @@ async function profileApp(b){
  file.onchange=async()=>{const f=file.files[0];file.value='';if(!f)return;const ext=IMGEXT[f.type];if(!ext||f.size>1e6)return toast('PNG, JPG, GIF or WebP under 1 MB');
   const path=`${me.id}/${Date.now()}.${ext}`,{error}=await sb.storage.from('avatars').upload(path,f,{contentType:f.type});if(error)return toast(error.message);
   const old=me.custom_avatar?.split('/avatars/')[1];if(await upd({custom_avatar:sb.storage.from('avatars').getPublicUrl(path).data.publicUrl})&&old)sb.storage.from('avatars').remove([old])};
- b.append(h('p',{},"Username (from GitHub, can't be changed): @"+me.login),h('div',{},'Role: ',badge(me.role)),pic,
+ b.append(h('p',{},"Username (from GitHub, can't be changed): @"+me.login),h('div',{},'Roles: ',badge(me.role),...myRoleNames.filter(n=>n!==me.role).map(badge)),pic,
   h('div',{className:'bar'},h('button',{on:{click:()=>file.click()}},'Upload picture'),h('button',{on:{click:()=>upd({custom_avatar:null})}},'Use GitHub picture')),
   h('div',{},'Display name'),nm,h('div',{},'Description'),bio,
   h('div',{className:'bar',style:'margin-top:6px'},h('button',{on:{click:()=>upd({display_name:nm.value.trim()||null,bio:bio.value.trim()||null})}},'Save'),h('button',{on:{click:()=>openProfile(me)}},'Preview')),file);show();
@@ -178,8 +189,12 @@ const EMO='😀 😂 🤣 😊 😍 😎 😭 😡 👍 👎 🙏 👏 🔥 💯
 const CHATIMG=/^https:\/\/[^/]+\/storage\/v1\/object\/public\/chat-images\//,IMGEXT={'image/png':'png','image/jpeg':'jpg','image/gif':'gif','image/webp':'webp'};
 const rich=t=>t.split(/(:[a-z0-9_]{2,24}:)/).map(x=>{const m=/^:(.+):$/.exec(x),u=m&&E[m[1]];return u?h('img',{src:u,title:x,style:'height:1.3em;vertical-align:middle'}):x});
 /* can the current user post in channel c? (empty roles + empty users = everyone) */
-const canPost=c=>{if(!me||!can('chat')||!c)return false;const r=c.post_roles||[],u=c.post_users||[];
- if(!r.length&&!u.length)return true;return can('bypass')||r.includes(me.role)||u.includes(me.login.toLowerCase())};
+const canPost=c=>{
+ if(!me||!can('chat')||!c)return false;
+ const r=c.post_roles||[],u=c.post_users||[];
+ if(!r.length&&!u.length)return true;
+ return can('bypass')||r.some(n=>myRoleNames.includes(n))||u.includes(me.login.toLowerCase());
+};
 async function chat(b,w){
  if(!sb)return noBack(b);
  const P={};((await sb.from('profiles').select(PCOLS)).data||[]).forEach(p=>P[p.id]=p);
@@ -247,7 +262,10 @@ function vClose(v,uid){const p=v.peers[uid];if(!p)return;try{p.pc.close()}catch{
 function vApply(){const v=VC;if(!v)return;const f=v.forced.has(me.id);v.track.enabled=!(v.self||f);
  if(v.ready)v.ch.track(v.pres());Object.entries(v.peers).forEach(([u,p])=>p.audio.muted=v.forced.has(u));v.ui?.()}
 /* screen share helpers: a viewer only accepts video from people whose role really has the screenshare permission */
-const vOkShare=(v,u)=>{const p=v.prof[u];return !!p&&(p.role==='owner'||(R[p.role]?.perms||[]).includes('screenshare'))};
+const vOkShare=(v,u)=>{
+ const names=v.roleNames?.[u]||[v.prof[u]?.role].filter(Boolean);
+ return names.includes('owner')||names.some(n=>(R[n]?.perms||[]).includes('screenshare'));
+};
 const vSharer=(v,u)=>!!v.ps[u]&&!v.blocked.has(u)&&vOkShare(v,u);
 /* renegotiation (perfect negotiation): used when a screen share track is added to a live connection */
 async function vNeg(p){if(!p.live||p.making)return;try{p.making=true;await p.pc.setLocalDescription();vSend(p.uid,'offer',p.pc.localDescription.toJSON())}catch{}finally{p.making=false}}
@@ -290,6 +308,11 @@ async function vSync(){const v=VC;if(!v)return;
  const need=ids.filter(u=>!v.prof[u]);
  if(need.length)((await sb.from('profiles').select(PCOLS).in('id',need)).data||[]).forEach(p=>v.prof[p.id]=p);
  if(v!==VC)return;
+ const{data:roleRows,error:roleError}=await sb.from('profile_roles').select('user_id,role_name').in('user_id',[me.id,...ids]);
+ if(roleError)console.warn('Voice role lookup failed:',roleError.message);
+ v.roleNames={[me.id]:myRoleNames.slice()};
+ (roleRows||[]).forEach(x=>(v.roleNames[x.user_id]??=[]).push(x.role_name));
+ if(v!==VC)return;
  /* the peer with the larger id makes the offer, so the two sides never collide */
  for(const u of ids)if(!v.peers[u]&&me.id>u){const p=vPeer(u);try{const o=await p.pc.createOffer();await p.pc.setLocalDescription(o);vSend(u,'offer',p.pc.localDescription.toJSON())}catch{}}
  v.ui?.()}
@@ -304,7 +327,7 @@ async function shareStart(){const v=VC;if(!v||v.share)return;
  let s;try{s=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:30}},audio:false})}catch{return}
  const kill=()=>s.getTracks().forEach(t=>{t.onended=null;t.stop()});
  if(v!==VC)return kill();
- const ok=(await sb.rpc('can_screenshare')).data;
+ const ok=can('screenshare');
  if(v!==VC)return kill();
  if(!ok){kill();return toast('You do not have permission to share your screen')}
  const t=s.getVideoTracks()[0];try{t.contentHint='detail'}catch{}
@@ -414,7 +437,7 @@ async function voice(b,w){
     h('div',{className:'bar',style:'margin:0 0 3px'},h('b',{style:'flex:1'},'🖥 '+nm+"'s screen"),h('button',{on:{click:()=>unwatch(u)}},'Stop watching')),
     v.peers[u]?.vs?vel(v,u,v.peers[u].vs):h('div',{},'Connecting...'))});
   const rows=ids.map(u=>{const p=v.prof[u]||{id:u,login:'...',role:'user'},fm=v.forced.has(u),sm=u===me.id?v.self:v.pm[u],tx=u===me.id?v.nomic:v.pn[u],
-    mod=can('voice_mod')&&u!==me.id&&(R[p.role]?.pos??-1)>mypos(),sh=u===me.id?!!v.share:!!v.ps[u]&&!v.blocked.has(u);
+    mod=can('voice_mod')&&u!==me.id&&Math.min(...((v.roleNames?.[u]||[p.role]).map(n=>R[n]?.pos??99999)))>mypos(),sh=u===me.id?!!v.share:!!v.ps[u]&&!v.blocked.has(u);
    return h('div',{className:'row'},h('span',{'data-vu':u,style:'display:inline-block;width:10px;height:10px;border-radius:50%;background:#888;border:1px solid var(--ink);margin-right:6px'}),
     av(p)?h('img',{src:av(p),width:20,height:20,style:'vertical-align:middle;margin-right:5px;object-fit:cover'}):'',
     h('b',{style:'color:'+rc(p.role)+';cursor:pointer',on:{click:()=>p.id&&openProfile(p)}},dn(p)+(u===me.id?' (you)':'')),badge(p.role),
@@ -465,18 +488,50 @@ async function admin(b){
  const pane=h('div'),bar=h('div',{className:'bar'}),log=a=>sb.from('audit').insert({actor:me.login,action:a});
  const cnt=async(t,f)=>{let q=sb.from(t).select('*',{count:'exact',head:true});if(f)q=f(q);return (await q).count??0};
  const T={
- Users:async()=>{const q=h('input',{placeholder:'Search users'}),l=h('div'),low=Object.values(R).filter(r=>r.pos>mypos()).sort((x,y)=>x.pos-y.pos);
+ Users:async()=>{
+  const q=h('input',{placeholder:'Search users'}),l=h('div');
   const d=(await sb.from('profiles').select('*').order('created_at',{ascending:false})).data||[];
+  const ids=d.map(p=>p.id);
+  const{data:assignmentRows,error:assignmentError}=ids.length?await sb.from('profile_roles').select('user_id,role_name').in('user_id',ids):{data:[],error:null};
+  if(assignmentError)return pane.replaceChildren(h('p',{},'Could not load role assignments: '+assignmentError.message));
+  const assigned={};
+  (assignmentRows||[]).forEach(x=>(assigned[x.user_id]??=[]).push(x.role_name));
   const draw=()=>l.replaceChildren(...d.filter(p=>p.login.toLowerCase().includes(q.value.toLowerCase())).map(p=>{
-   const set=async r=>{const{error}=await sb.from('profiles').update({role:r}).eq('id',p.id);if(error)return toast(error.message);log(`${p.login}: ${p.role} -> ${r}`);p.role=r;toast('Updated');draw()};
-   let ctl='';
-   if(p.id!==me.id&&(R[p.role]?.pos??-1)>mypos()){
-    if(can('manage_roles')){ctl=h('select',{},...low.map(r=>h('option',{value:r.name,selected:r.name===p.role},r.name)));ctl.onchange=()=>set(ctl.value)}
-    else if(can('ban'))ctl=h('button',{on:{click:()=>set(p.role==='banned'?'user':'banned')}},p.role==='banned'?'Unban':'Ban')}
-   return h('div',{className:'row'},h('b',{style:'color:'+rc(p.role)},dn(p)),` @${p.login} [${p.role}] `,ctl,can('ban')&&p.id!==me.id&&(R[p.role]?.pos??-1)>mypos()&&(p.display_name||p.bio||p.custom_avatar)?h('button',{on:{click:async()=>{const{error}=await sb.from('profiles').update({display_name:null,bio:null,custom_avatar:null}).eq('id',p.id);if(error)return toast(error.message);log('reset profile of '+p.login);Object.assign(p,{display_name:null,bio:null,custom_avatar:null});draw()}}},'Reset profile'):'')}));
+   const current=assigned[p.id]||[p.role||'user'];
+   const targetPos=Math.min(...current.map(n=>R[n]?.pos??99999));
+   const manageable=p.id!==me.id&&targetPos>mypos();
+   let controls='';
+   if(manageable&&can('manage_roles')){
+    const available=Object.values(R).filter(r=>r.name!=='owner'&&r.name!=='banned'&&r.pos>mypos()).sort((a,b)=>a.pos-b.pos);
+    const boxes=available.map(r=>[r.name,h('input',{type:'checkbox',checked:current.includes(r.name),disabled:r.name==='user'})]);
+    const banned=h('input',{type:'checkbox',checked:current.includes('banned')});
+    const save=async()=>{
+     const selected=banned.checked?['banned']:boxes.filter(([,c])=>c.checked).map(([n])=>n);
+     if(!selected.length||(!banned.checked&&!selected.includes('user')))return toast('Keep the user role assigned');
+     const{error}=await sb.rpc('set_user_roles',{target_user_id:p.id,role_names:selected});
+     if(error)return toast(error.message);
+     assigned[p.id]=selected;
+     p.role=selected.includes('banned')?'banned':selected.slice().sort((a,b)=>(R[a]?.pos??99999)-(R[b]?.pos??99999))[0];
+     log(`${p.login}: roles set to ${selected.join(', ')}`);toast('Roles updated');draw();
+    };
+    controls=h('div',{style:'margin-top:5px'},h('div',{},'Assigned roles:'),
+     h('div',{},...boxes.map(([n,c])=>h('label',{style:'display:inline-block;margin:2px 8px 2px 0'},c,' '+n))),
+     h('label',{},banned,' banned'),
+     h('div',{style:'margin-top:4px'},h('button',{on:{click:save}},'Save roles')));
+   }else if(manageable&&can('ban')){
+    controls=h('button',{on:{click:async()=>{
+     const selected=current.includes('banned')?['user']:['banned'];
+     const{error}=await sb.rpc('set_user_roles',{target_user_id:p.id,role_names:selected});
+     if(error)return toast(error.message);
+     assigned[p.id]=selected;p.role=selected[0];toast(selected[0]==='banned'?'Banned':'Unbanned');draw();
+    }}},current.includes('banned')?'Unban':'Ban');
+   }
+   const reset=can('ban')&&manageable&&(p.display_name||p.bio||p.custom_avatar)?h('button',{on:{click:async()=>{const{error}=await sb.from('profiles').update({display_name:null,bio:null,custom_avatar:null}).eq('id',p.id);if(error)return toast(error.message);log('reset profile of '+p.login);Object.assign(p,{display_name:null,bio:null,custom_avatar:null});draw()}}},'Reset profile'):'';
+   return h('div',{className:'row'},h('b',{style:'color:'+rc(p.role)},dn(p)),` @${p.login} [${current.join(' + ')}] `,controls,reset);
+  }));
   q.oninput=draw;pane.replaceChildren(q,l);draw()},
  Roles:async()=>{await loadRoles();
-  const mine=new Set(me.role==='owner'?Object.keys(PERMS):R[me.role].perms),isOwner=me.role==='owner';
+  const mine=new Set((await sb.rpc('my_perms')).data||[]),isOwner=myRoleNames.includes('owner');
   const nm=h('input',{placeholder:'role-name',maxLength:20}),col=h('input',{type:'color',value:'#6ff2c5'}),pos=h('input',{type:'number',value:mypos()+10,title:'Rank: lower = more powerful',style:'width:90px'}),
    cb=Object.entries(PERMS).map(([k])=>[k,h('input',{type:'checkbox',disabled:!mine.has(k)})]);
   const edit=r=>{nm.value=r.name;nm.disabled=true;col.value=r.color;pos.value=r.pos;pos.disabled=r.builtin;cb.forEach(([k,c])=>c.checked=r.perms.includes(k))};
@@ -645,6 +700,7 @@ const clock=()=>{const c=$('#clk');if(c)c.textContent=new Date().toLocaleTimeStr
 async function loadMe(){
   voiceLeave();
   me=null;
+  myRoleNames=[];
   grantedPerms.clear();
 
   if(sb){
@@ -658,6 +714,7 @@ async function loadMe(){
     }
 
     await loadRoles();
+    await loadMyRoles();
     await loadPermissions();
   }
 
