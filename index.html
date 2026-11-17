@@ -367,6 +367,7 @@ async function dmApp(b,w){
  const P=w.P={},list=h('div',{style:'width:150px;overflow:auto;border-right:2px solid var(--lo);padding-right:4px'}),pane=h('div',{style:'flex:1;display:flex;flex-direction:column;min-width:0;padding-left:6px'});
  let cur=null,last={};
  b.style.cssText+=';display:flex;padding:4px';b.append(list,pane);
+ if(!Object.keys(E).length)((await sb.from('emojis').select('name,url')).data||[]).forEach(x=>{if(/^https:\/\//.test(x.url))E[x.name]=x.url});
  const prof=async id=>P[id]||(P[id]=(await sb.from('profiles').select(PCOLS).eq('id',id).maybeSingle()).data);
  const bubble=m=>h('div',{className:'msg',id:'d'+m.id,style:m.sender_id===me.id?'text-align:right':''},h('small',{style:'opacity:.6'},new Date(m.created_at).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})+' '),h('span',{},...rich(m.body)));
  w.draw=async()=>{const rows=(await sb.from('dms').select('sender_id,recipient_id,body,created_at').or(`sender_id.eq.${me.id},recipient_id.eq.${me.id}`).order('created_at',{ascending:false}).limit(200)).data||[];
@@ -380,7 +381,10 @@ async function dmApp(b,w){
  const open=async u=>{cur=u.id;P[u.id]=u;const msgs=h('div',{style:'flex:1;overflow:auto;background:#fff;border:2px solid;border-color:var(--lo) var(--hi) var(--hi) var(--lo);padding:3px'}),inp=h('input',{maxLength:1000,placeholder:'Message '+dn(u),style:'flex:1'});
   const send=async()=>{const body=inp.value.trim();if(!body)return;inp.value='';const{data,error}=await sb.from('dms').insert({sender_id:me.id,recipient_id:u.id,body}).select().single();if(error)return toast(error.message);msgs.append(bubble(data));msgs.scrollTop=1e9;last[u.id]=data};
   inp.onkeydown=e=>{if(e.key==='Enter')send()};
-  pane.replaceChildren(h('div',{className:'bar'},h('b',{style:'color:'+rc(u.role)+';cursor:pointer',on:{click:()=>openProfile(u)}},dn(u)),badge(u.role)),msgs,h('div',{className:'bar',style:'margin:4px 0 0'},inp,h('button',{on:{click:send}},'Send')));
+  const pick=h('div',{style:'display:none;flex-wrap:wrap;gap:2px;max-height:110px;overflow:auto;background:#fff;border:2px solid var(--lo);padding:4px'},
+   ...EMO.map(x=>h('button',{style:'border:0;background:none;font-size:20px;padding:0 3px',on:{click:()=>{inp.value+=x;inp.focus()}}},x)),
+   ...Object.entries(E).map(([n,url])=>h('button',{style:'border:0;background:none;padding:0 3px',title:':'+n+':',on:{click:()=>{inp.value+=`:${n}:`;inp.focus()}}},h('img',{src:url,style:'height:22px'}))));
+  pane.replaceChildren(h('div',{className:'bar'},h('b',{style:'color:'+rc(u.role)+';cursor:pointer',on:{click:()=>openProfile(u)}},dn(u)),badge(u.role)),msgs,pick,h('div',{className:'bar',style:'margin:4px 0 0'},h('button',{title:'Emoji',on:{click:()=>pick.style.display=pick.style.display==='none'?'flex':'none'}},'😀'),inp,h('button',{on:{click:send}},'Send')));
   w.append=m=>{if(m.id&&msgs.querySelector('#d'+m.id))return;msgs.append(bubble(m));msgs.scrollTop=1e9};
   ((await sb.from('dms').select('*').or(`and(sender_id.eq.${me.id},recipient_id.eq.${u.id}),and(sender_id.eq.${u.id},recipient_id.eq.${me.id})`).order('created_at',{ascending:false}).limit(60)).data||[]).reverse().forEach(m=>msgs.append(bubble(m)));msgs.scrollTop=1e9;inp.focus();
   if(dmUnread[u.id]){delete dmUnread[u.id];await sb.from('dms').update({read_at:new Date().toISOString()}).eq('recipient_id',me.id).eq('sender_id',u.id).is('read_at',null)}w.draw()};
