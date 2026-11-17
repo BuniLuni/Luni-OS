@@ -61,7 +61,7 @@ body.noscan::after{display:none}
 const CFG={url:'https://cyjyuvrarekwlefxcqui.supabase.co',key:'sb_publishable_E2_jmyi7lsaceSdaVGeQAg_FvsDUTpb'};
 /* ================================================================= */
 const $=s=>document.querySelector(s);
-const VER={client:'5.2.1',server:'12.4.4'};
+const VER={client:'7.3.9',server:'33.7.0'};
 const h=(t,p,...k)=>{const e=document.createElement(t);for(const x in p||{}){if(x==='on')for(const y in p.on)e.addEventListener(y,p.on[y]);else if(x in e)e[x]=p[x];else e.setAttribute(x,p[x])}k.flat().forEach(c=>e.append(c));return e};
 const store={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
 const toast=m=>{const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.display='none',2500)};
@@ -488,6 +488,24 @@ function tray(){
  const t=$('#tray');t.replaceChildren(nowp?h('span',{},'♪ '+nowp.slice(0,18)+' '):'',VC?h('button',{on:{click:()=>openApp('voice')}},'🎙 '+VC.name):'',Object.keys(onl).length?h('button',{on:{click:()=>openApp('online')}},'● '+Object.keys(onl).length):'',me?h('button',{on:{click:async()=>{await sb.auth.signOut()}}},`${dn(me)} [${me.role}] - log out`):h('button',{on:{click:login}},'Log in with GitHub'),' ',h('span',{id:'clk'}));clock()}
 const clock=()=>{const c=$('#clk');if(c)c.textContent=new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})};
 async function loadMe(){voiceLeave();me=null;if(sb){const{data:{session}}=await sb.auth.getSession();if(session)me=(await sb.from('profiles').select('*').eq('id',session.user.id).single()).data;await loadRoles()}presence();desk();tray()}
+$('#start').onclick=()=>$('#menu').classList.toggle('on');
+$('#desk').onclick=()=>$('#menu').classList.remove('on');
+sb?.auth.onAuthStateChange(()=>setTimeout(loadMe,0));
+$('#ver').append(Object.assign(document.createElement('span'),{className:'vf',textContent:`Client ${VER.client} | Server ${VER.server}`}),Object.assign(document.createElement('span'),{className:'vs',textContent:`C${VER.client} S${VER.server}`}));$('#ver').title=`Client version ${VER.client}, server version ${VER.server}`;
+applySettings();loadMe();loadAnn();setInterval(clock,20000);
+</script></body></html>
+],['New app...',()=>openApp('builder')],
+ ['Next wallpaper',()=>{const k=Object.keys(WP),t=store.get('set',{wp:'Grape',scan:true});t.wp=k[(k.indexOf(t.wp)+1)%k.length];store.set('set',t);applySettings()}],
+ ['Toggle CRT scanlines',()=>{const t=store.get('set',{wp:'Grape',scan:true});t.scan=!t.scan;store.set('set',t);applySettings()}],
+ ['-'],['Recycle Bin',()=>openApp('bin')],['Settings',()=>openApp('settings')]]);
+$('#desk').oncontextmenu=deskMenu;lp($('#desk'),e=>e.target.id==='desk'&&deskMenu(e));
+addEventListener('pointerdown',e=>{if(!e.target.closest('#ctx'))$('#ctx').classList.remove('on')},true);
+addEventListener('keydown',e=>e.key==='Escape'&&$('#ctx').classList.remove('on'));
+addEventListener('contextmenu',e=>{if(!e.target.closest('input,textarea'))e.preventDefault()});
+function tray(){
+ const t=$('#tray');t.replaceChildren(nowp?h('span',{},'♪ '+nowp.slice(0,18)+' '):'',Object.keys(onl).length?h('button',{on:{click:()=>openApp('online')}},'● '+Object.keys(onl).length):'',me?h('button',{on:{click:async()=>{await sb.auth.signOut()}}},`${me.login} [${me.role}] - log out`):h('button',{on:{click:login}},'Log in with GitHub'),' ',h('span',{id:'clk'}));clock()}
+const clock=()=>{const c=$('#clk');if(c)c.textContent=new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})};
+async function loadMe(){me=null;if(sb){const{data:{session}}=await sb.auth.getSession();if(session)me=(await sb.from('profiles').select('*').eq('id',session.user.id).single()).data;await loadRoles()}presence();desk();tray()}
 $('#start').onclick=()=>$('#menu').classList.toggle('on');
 $('#desk').onclick=()=>$('#menu').classList.remove('on');
 sb?.auth.onAuthStateChange(()=>setTimeout(loadMe,0));
