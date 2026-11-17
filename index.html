@@ -129,6 +129,9 @@ function notes(b){const t=h('textarea',{rows:14,value:store.get('notes','')});t.
 const EMO='😀 😂 🤣 😊 😍 😎 😭 😡 👍 👎 🙏 👏 🔥 💯 ✨ 💀 🎉 ❤️ 💔 🤔 🙄 😴 🤯 🥳 😱 🤝 👀 💩 🍕 🍔 ☕ 🎮 🎵 🐱 🐶 🌈 ⭐ ⚡'.split(' ');
 const CHATIMG=/^https:\/\/[^/]+\/storage\/v1\/object\/public\/chat-images\//,IMGEXT={'image/png':'png','image/jpeg':'jpg','image/gif':'gif','image/webp':'webp'};
 const rich=t=>t.split(/(:[a-z0-9_]{2,24}:)/).map(x=>{const m=/^:(.+):$/.exec(x),u=m&&E[m[1]];return u?h('img',{src:u,title:x,style:'height:1.3em;vertical-align:middle'}):x});
+/* can the current user post in channel c? (empty roles + empty users = everyone) */
+const canPost=c=>{if(!me||!can('chat')||!c)return false;const r=c.post_roles||[],u=c.post_users||[];
+ if(!r.length&&!u.length)return true;return can('bypass')||r.includes(me.role)||u.includes(me.login.toLowerCase())};
 async function chat(b,w){
  if(!sb)return noBack(b);
  const P={};((await sb.from('profiles').select('id,role')).data||[]).forEach(p=>P[p.id]=p.role);
@@ -138,17 +141,20 @@ async function chat(b,w){
  let cur=store.get('ch',1);if(!chs.find(c=>c.id===cur))cur=chs[0].id;
  const lock=(await sb.from('settings').select('value').eq('key','chat_locked').maybeSingle()).data?.value==='true'&&!can('bypass');
  const csel=h('select'),list=h('div',{style:'flex:1;min-height:0;overflow:auto'}),file=h('input',{type:'file',accept:'image/png,image/jpeg,image/gif,image/webp',style:'display:none'});
- const inp=h('input',{placeholder:lock?'Chat is locked by staff':!me?'Log in to chat':!can('chat')?'You cannot chat':'Say something',disabled:!me||!can('chat')||lock,maxLength:500});
- const fillC=()=>csel.replaceChildren(...chs.map(c=>h('option',{value:c.id,selected:c.id===cur},'# '+c.name)));
+ const cc=()=>chs.find(c=>c.id===cur);
+ const inp=h('input',{maxLength:500});
+ const gate=()=>{const ok=!lock&&canPost(cc());inp.disabled=!ok;
+  inp.placeholder=lock?'Chat is locked by staff':!me?'Log in to chat':!can('chat')?'You cannot chat':!canPost(cc())?'You cannot post in this channel':'Say something'};
+ const fillC=()=>csel.replaceChildren(...chs.map(c=>h('option',{value:c.id,selected:c.id===cur},'# '+c.name+((c.post_roles?.length||c.post_users?.length)?' 🔒':''))));
  const add=m=>{const r=h('div',{className:'msg',id:'m'+m.id},h('b',{style:'color:'+rc(P[m.user_id])},m.login),': ',...rich(m.body||''));
   if(m.image_url&&CHATIMG.test(m.image_url))r.append(h('div',{},h('img',{src:m.image_url,loading:'lazy',style:'max-width:100%;max-height:220px;cursor:zoom-in',on:{click:()=>window.open(m.image_url,'_blank','noopener')}})));
   if(me&&(can('delete_messages')||me.id===m.user_id))r.append(' ',h('button',{on:{click:()=>sb.from('messages').delete().eq('id',m.id)}},'x'));
   list.append(r);list.scrollTop=1e9};
  const load=async()=>{list.replaceChildren();((await sb.from('messages').select('*').eq('channel_id',cur).order('created_at',{ascending:false}).limit(50)).data||[]).reverse().forEach(add)};
- csel.onchange=()=>{cur=+csel.value;store.set('ch',cur);load()};
+ csel.onchange=()=>{cur=+csel.value;store.set('ch',cur);gate();load()};
  const mk=can('create_channels')?h('button',{on:{click:async()=>{const n=(prompt('Channel name (a-z, 0-9, -)')||'').trim().toLowerCase();if(!n)return;if(!/^[a-z0-9-]{1,24}$/.test(n))return toast('Use a-z, 0-9 and - (24 max)');
-  const{data,error}=await sb.from('channels').insert({name:n,created_by:me.id}).select().single();if(error)return toast(error.message);chs.push(data);cur=data.id;store.set('ch',cur);fillC();load()}}},'+'):'';
- const send=async img=>{const body=inp.value.trim();if(!body&&!img)return;inp.value='';const{error}=await sb.from('messages').insert({user_id:me.id,login:me.login,body,channel_id:cur,image_url:img||null});if(error)toast(error.message)};
+  const{data,error}=await sb.from('channels').insert({name:n,created_by:me.id}).select().single();if(error)return toast(error.message);chs.push(data);cur=data.id;store.set('ch',cur);fillC();gate();load()}}},'+'):'';
+ const send=async img=>{if(!canPost(cc()))return toast('You cannot post in this channel');const body=inp.value.trim();if(!body&&!img)return;inp.value='';const{error}=await sb.from('messages').insert({user_id:me.id,login:me.login,body,channel_id:cur,image_url:img||null});if(error)toast(error.message)};
  inp.onkeydown=e=>{if(e.key==='Enter')send()};
  file.onchange=async()=>{const f=file.files[0];file.value='';if(!f)return;const ext=IMGEXT[f.type];if(!ext||f.size>3e6)return toast('PNG, JPG, GIF or WebP under 3 MB');toast('Uploading...');
   const path=`${me.id}/${Date.now()}.${ext}`,{error}=await sb.storage.from('chat-images').upload(path,f,{contentType:f.type});if(error)return toast(error.message);send(sb.storage.from('chat-images').getPublicUrl(path).data.publicUrl)};
@@ -159,7 +165,7 @@ async function chat(b,w){
  w.onclose=()=>sb.removeChannel(ch);
  b.style.cssText+=';display:flex;flex-direction:column;padding:4px';fillC();
  b.append(h('div',{className:'bar'},csel,mk),list,pick,h('div',{className:'bar',style:'margin:4px 0 0'},h('button',{on:{click:()=>pick.style.display=pick.style.display==='none'?'flex':'none'}},'😀'),can('images')?h('button',{on:{click:()=>file.click()}},'🖼'):'',inp),file);
- if(!me)b.append(h('button',{on:{click:login}},'Log in with GitHub'));load();
+ if(!me)b.append(h('button',{on:{click:login}},'Log in with GitHub'));gate();load();
 }
 /* ---- user apps + workshop ---- */
 const TPL='<!doctype html>\n<body style="font-family:sans-serif;text-align:center">\n<h1>Hello!</h1>\n<button onclick="this.textContent=\'clicked\'">Click me</button>\n</body>';
@@ -179,7 +185,7 @@ function shop(b,pre){
  bar.append(h('button',{on:{click:make}},'Make an app'),h('button',{on:{click:browse}},'Browse community'));
  b.append(bar,pane);make();
 }
-const PERMS={chat:'Send messages',images:'Upload images',create_channels:'Create channels',manage_channels:'Delete channels',delete_messages:'Delete any message',publish_apps:'Publish apps',delete_apps:'Delete any app',manage_emojis:'Manage custom emojis',ban:'Ban / unban',manage_roles:'Create roles and assign them',announce:'Post announcements',site_settings:'Change site settings',view_audit:'View audit log',bypass:'Bypass locks and size limits',admin_panel:'Open the admin panel'};
+const PERMS={chat:'Send messages',images:'Upload images',create_channels:'Create channels',manage_channels:'Delete channels and set who can post',delete_messages:'Delete any message',publish_apps:'Publish apps',delete_apps:'Delete any app',manage_emojis:'Manage custom emojis',ban:'Ban / unban',manage_roles:'Create roles and assign them',announce:'Post announcements',site_settings:'Change site settings',view_audit:'View audit log',bypass:'Bypass locks and size limits',admin_panel:'Open the admin panel'};
 async function admin(b){
  if(!staff())return b.append('Staff only.');
  const pane=h('div'),bar=h('div',{className:'bar'}),log=a=>sb.from('audit').insert({actor:me.login,action:a});
@@ -215,8 +221,15 @@ async function admin(b){
    const path=`${n}-${Date.now()}.${IMGEXT[x.type]}`;let r=await sb.storage.from('emojis').upload(path,x,{contentType:x.type});if(r.error)return toast(r.error.message);
    r=await sb.from('emojis').insert({name:n,url:sb.storage.from('emojis').getPublicUrl(path).data.publicUrl,created_by:me.id});if(r.error)return toast(r.error.message);log('emoji added :'+n+':');T.Emojis()};
   pane.replaceChildren(h('div',{className:'bar'},nm,f,h('button',{on:{click:up}},'Upload')),h('p',{},'People type :name: in chat to use these.'),...d.map(x=>h('div',{className:'row'},h('img',{src:x.url,style:'height:24px;vertical-align:middle'}),` :${x.name}: `,h('button',{on:{click:async()=>{await sb.from('emojis').delete().eq('name',x.name);log('emoji removed :'+x.name+':');T.Emojis()}}},'Delete'))))},
- Channels:async()=>{const d=(await sb.from('channels').select('*').order('id')).data||[];
-  pane.replaceChildren(h('p',{},'Create channels with the + button in Global Chat.'),...d.map(c=>h('div',{className:'row'},'# '+c.name+' ',c.id===1?'(default)':h('button',{on:{click:async()=>{if(!confirm('Delete #'+c.name+' and all its messages?'))return;const{error}=await sb.from('channels').delete().eq('id',c.id);toast(error?error.message:'Deleted');log('channel deleted: '+c.name);T.Channels()}}},'Delete'))))},
+ Channels:async()=>{const d=(await sb.from('channels').select('*').order('id')).data||[],rl=Object.keys(R).filter(n=>n!=='banned');
+  pane.replaceChildren(h('p',{},'Tick roles to limit who can post in a channel. Nothing ticked and no names = everyone. Owners and people with Bypass can always post.'),
+  ...d.map(c=>{
+   const have=new Set(c.post_roles||[]),boxes=rl.map(n=>[n,h('input',{type:'checkbox',checked:have.has(n)})]),
+    users=h('input',{placeholder:'Extra people: GitHub logins, comma separated',value:(c.post_users||[]).join(', '),style:'width:100%'});
+   const save=async()=>{const post_roles=boxes.filter(x=>x[1].checked).map(x=>x[0]),post_users=users.value.split(',').map(s=>s.trim().toLowerCase().replace(/^@/,'')).filter(Boolean);
+    const{error}=await sb.from('channels').update({post_roles,post_users}).eq('id',c.id);toast(error?error.message:'Saved');if(!error)log(`#${c.name} posting: roles [${post_roles}] users [${post_users}]`)};
+   return h('div',{className:'row'},h('b',{},'# '+c.name+' '),c.id===1?'(default) ':h('button',{on:{click:async()=>{if(!confirm('Delete #'+c.name+' and all its messages?'))return;const{error}=await sb.from('channels').delete().eq('id',c.id);toast(error?error.message:'Deleted');log('channel deleted: '+c.name);T.Channels()}}},'Delete'),
+    h('div',{},'Can post:'),h('div',{},...boxes.map(([n,cb])=>h('label',{style:'margin-right:10px;white-space:nowrap'},cb,' '+n))),users,h('button',{on:{click:save}},'Save'))}))},
  Chat:async()=>{const d=(await sb.from('messages').select('*').order('created_at',{ascending:false}).limit(40)).data||[];
   pane.replaceChildren(...d.map(m=>h('div',{className:'row'},h('b',{},m.login),': '+(m.body||'[image]')+' ',h('button',{on:{click:async()=>{await sb.from('messages').delete().eq('id',m.id);log('deleted msg by '+m.login);T.Chat()}}},'x'),h('button',{on:{click:async()=>{await sb.from('messages').delete().eq('user_id',m.user_id);log('purged msgs of '+m.login);T.Chat()}}},'purge user'))),d.length?'':'No messages.')},
  Apps:async()=>{const d=(await sb.from('apps').select('id,name,icon,author_login').order('created_at',{ascending:false})).data||[];
