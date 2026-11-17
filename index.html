@@ -101,7 +101,7 @@ function weather(b){
    out.replaceChildren(h('div',{className:'big'},Math.round(d.current.temperature_2m)+'°F'),h('div',{},`${g.name}, ${g.admin1||g.country}: ${WC[d.current.weather_code]||'Weather'}, wind ${d.current.wind_speed_10m} mph`),
     ...d.daily.time.map((t,i)=>h('div',{className:'row'},new Date(t+'T12:00').toLocaleDateString([],{weekday:'short'})+`  ${WC[d.daily.weather_code[i]]||''}  ${Math.round(d.daily.temperature_2m_max[i])}° / ${Math.round(d.daily.temperature_2m_min[i])}°`)));
   }catch{out.textContent='Weather failed to load.'}};
- inp.onkeydown=e=>e.key==='Enter'&&go();b.append(h('div',{className:'bar'},inp,h('button',{on:{click:go}},'Go')),out);go();
+ inp.onkeydown=e=>{if(e.key==='Enter')go()};b.append(h('div',{className:'bar'},inp,h('button',{on:{click:go}},'Go')),out);go();
 }
 const FEEDS=[['BBC World','https://feeds.bbci.co.uk/news/world/rss.xml'],['Hacker News','https://hnrss.org/frontpage'],['NASA','https://www.nasa.gov/feed/'],['Ars Technica','https://feeds.arstechnica.com/arstechnica/index']];
 function rss(b){
@@ -122,7 +122,7 @@ function radio(b){
   try{const d=await(await fetch('https://de1.api.radio-browser.info/json/stations/search?hidebroken=true&limit=30&order=clickcount&reverse=true&name='+encodeURIComponent(q.value))).json();
    out.replaceChildren(...d.map(s=>h('div',{className:'row'},h('button',{on:{click:()=>{au.src=s.url_resolved;au.play().catch(()=>toast('Station would not play'));nowp=s.name;tray()}}},'Play'),' '+s.name)));
    if(!d.length)out.textContent='No stations found.'}catch{out.textContent='Radio search failed.'}};
- q.onkeydown=e=>e.key==='Enter'&&go();
+ q.onkeydown=e=>{if(e.key==='Enter')go()};
  b.append(h('div',{className:'bar'},q,h('button',{on:{click:go}},'Search'),h('button',{on:{click:()=>{au.pause();nowp='';tray()}}},'Stop')),out);go();
 }
 function notes(b){const t=h('textarea',{rows:14,value:store.get('notes','')});t.oninput=()=>store.set('notes',t.value);b.append(t)}
@@ -149,7 +149,7 @@ async function chat(b,w){
  const mk=can('create_channels')?h('button',{on:{click:async()=>{const n=(prompt('Channel name (a-z, 0-9, -)')||'').trim().toLowerCase();if(!n)return;if(!/^[a-z0-9-]{1,24}$/.test(n))return toast('Use a-z, 0-9 and - (24 max)');
   const{data,error}=await sb.from('channels').insert({name:n,created_by:me.id}).select().single();if(error)return toast(error.message);chs.push(data);cur=data.id;store.set('ch',cur);fillC();load()}}},'+'):'';
  const send=async img=>{const body=inp.value.trim();if(!body&&!img)return;inp.value='';const{error}=await sb.from('messages').insert({user_id:me.id,login:me.login,body,channel_id:cur,image_url:img||null});if(error)toast(error.message)};
- inp.onkeydown=e=>e.key==='Enter'&&send();
+ inp.onkeydown=e=>{if(e.key==='Enter')send()};
  file.onchange=async()=>{const f=file.files[0];file.value='';if(!f)return;const ext=IMGEXT[f.type];if(!ext||f.size>3e6)return toast('PNG, JPG, GIF or WebP under 3 MB');toast('Uploading...');
   const path=`${me.id}/${Date.now()}.${ext}`,{error}=await sb.storage.from('chat-images').upload(path,f,{contentType:f.type});if(error)return toast(error.message);send(sb.storage.from('chat-images').getPublicUrl(path).data.publicUrl)};
  const pick=h('div',{style:'display:none;flex-wrap:wrap;gap:2px;max-height:110px;overflow:auto;background:#fff;border:2px solid var(--lo);padding:4px'},
@@ -263,7 +263,7 @@ function paint(b){
  const pos=e=>{const r=c.getBoundingClientRect();return[(e.clientX-r.left)*c.width/r.width,(e.clientY-r.top)*c.height/r.height]};
  c.onpointerdown=e=>{on=true;x.beginPath();x.moveTo(...pos(e))};
  c.onpointermove=e=>{if(!on)return;x.strokeStyle=col.value;x.lineWidth=sz.value;x.lineCap='round';x.lineTo(...pos(e));x.stroke()};
- c.onpointerup=c.onpointerleave=()=>on=false;
+ c.onpointerup=c.onpointerleave=()=>{on=false};
  b.append(h('div',{className:'bar'},col,sz,h('button',{on:{click:wipe}},'Clear'),h('button',{on:{click:()=>h('a',{href:c.toDataURL(),download:'paint.png'}).click()}},'Save PNG')),c);
 }
 function snake(b,w){
