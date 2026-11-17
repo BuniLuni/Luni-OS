@@ -57,7 +57,7 @@ body.noscan::after{display:none}
 <div id="desk"></div><div id="ann"></div><div id="menu"></div><div id="toast"></div><div id="ctx"></div>
 <div id="tb"><button id="start" class="start">Luni's Thing</button><div id="tasks"></div><a id="credit" href="https://radiusos.ignorelist.com/" target="_blank" rel="noopener noreferrer">Radius did it first and better (Radius OS)</a><span id="ver"></span><span id="tray"></span></div>
 <script>
-/* ====== CONFIG: paste your Supabase values (see schema.sql) ====== */
+/* ====== CONFIG: Supabase values (see has_perm.sql) ====== */
 const CFG={url:'https://cyjyuvrarekwlefxcqui.supabase.co',key:'sb_publishable_E2_jmyi7lsaceSdaVGeQAg_FvsDUTpb'};
 /* ================================================================= */
 const $=s=>document.querySelector(s);
@@ -67,7 +67,28 @@ const store={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch
 const toast=m=>{const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.display='none',2500)};
 const sb=CFG.url&&window.supabase?supabase.createClient(CFG.url,CFG.key):null;
 let me=null,R={},E={};
-const can=p=>!!me&&(me.role==='owner'||(R[me.role]?.perms||[]).includes(p));
+let grantedPerms=new Set();
+
+/* Permission checks are fetched from the database via public.has_perm(text).
+   Keep can() synchronous so the existing interface can use it everywhere. */
+const can=p=>!!me&&(me.role==='owner'||grantedPerms.has(p));
+
+async function loadPermissions(){
+  grantedPerms.clear();
+  if(!me||!sb)return;
+
+  const permissionNames=Object.keys(PERMS);
+  const results=await Promise.all(permissionNames.map(async p=>{
+    const {data,error}=await sb.rpc('has_perm',{p});
+    if(error){
+      console.error('Permission check failed for "'+p+'":',error);
+      return null;
+    }
+    return data===true?p:null;
+  }));
+
+  grantedPerms=new Set(results.filter(Boolean));
+}
 const rc=n=>R[n]?.color||'inherit',mypos=()=>R[me?.role]?.pos??99999,staff=()=>can('admin_panel');
 async function loadRoles(){R={};((await sb.from('roles').select('*')).data||[]).forEach(r=>R[r.name]=r)}
 const PCOLS='id,login,display_name,bio,avatar,custom_avatar,role,created_at',dn=p=>p.display_name||p.login;
@@ -573,7 +594,29 @@ addEventListener('contextmenu',e=>{if(!e.target.closest('input,textarea'))e.prev
 function tray(){
  const t=$('#tray');t.replaceChildren(nowp?h('span',{},'♪ '+nowp.slice(0,18)+' '):'',VC?h('button',{on:{click:()=>openApp('voice')}},'🎙 '+VC.name):'',Object.keys(onl).length?h('button',{on:{click:()=>openApp('online')}},'● '+Object.keys(onl).length):'',me?h('button',{on:{click:async()=>{await sb.auth.signOut()}}},`${dn(me)} [${me.role}] - log out`):h('button',{on:{click:login}},'Log in with GitHub'),' ',h('span',{id:'clk'}));clock()}
 const clock=()=>{const c=$('#clk');if(c)c.textContent=new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})};
-async function loadMe(){voiceLeave();me=null;if(sb){const{data:{session}}=await sb.auth.getSession();if(session)me=(await sb.from('profiles').select('*').eq('id',session.user.id).single()).data;await loadRoles()}presence();desk();tray()}
+async function loadMe(){
+  voiceLeave();
+  me=null;
+  grantedPerms.clear();
+
+  if(sb){
+    const {data:{session},error:sessionError}=await sb.auth.getSession();
+    if(sessionError)console.error('Session loading failed:',sessionError);
+
+    if(session){
+      const {data,error}=await sb.from('profiles').select('*').eq('id',session.user.id).single();
+      if(error)console.error('Profile loading failed:',error);
+      else me=data;
+    }
+
+    await loadRoles();
+    await loadPermissions();
+  }
+
+  presence();
+  desk();
+  tray();
+}
 $('#start').onclick=()=>$('#menu').classList.toggle('on');
 $('#desk').onclick=()=>$('#menu').classList.remove('on');
 sb?.auth.onAuthStateChange(()=>setTimeout(loadMe,0));
