@@ -198,7 +198,28 @@ async function chat(b,w){
   const p=P[m.user_id]||{login:m.login,role:'user'},a=av(p),op=()=>P[m.user_id]&&openProfile(p);
   const r=h('div',{className:'msg',id:'m'+m.id},a?h('img',{src:a,width:22,height:22,style:'vertical-align:middle;margin-right:5px;cursor:pointer;border:1px solid var(--ink);object-fit:cover',on:{click:op}}):'',h('b',{style:'color:'+rc(p.role)+';cursor:pointer',on:{click:op}},dn(p)),badge(p.role),p.display_name&&p.display_name!==p.login?h('small',{style:'opacity:.6'},' @'+p.login):'',': ',...rich(m.body||''));
   if(m.image_url&&CHATIMG.test(m.image_url))r.append(h('div',{},h('img',{src:m.image_url,loading:'lazy',style:'max-width:100%;max-height:220px;cursor:zoom-in',on:{click:()=>window.open(m.image_url,'_blank','noopener')}})));
-  if(me&&(can('delete_messages')||me.id===m.user_id))r.append(' ',h('button',{on:{click:()=>sb.from('messages').delete().eq('id',m.id)}},'x'));
+  
+if(me&&(can('delete_messages')||me.id===m.user_id))
+  r.append(' ',h('button',{
+    on:{
+      click:async()=>{
+        const {error}=await sb
+          .from('messages')
+          .delete()
+          .eq('id',m.id);
+
+        if(error){
+          console.error('Message deletion failed:',error);
+          toast('Delete failed: '+error.message);
+          return;
+        }
+
+        r.remove();
+        toast('Message deleted');
+      }
+    }
+  },'x'));
+
   list.append(r);list.scrollTop=1e9};
  const load=async()=>{list.replaceChildren();((await sb.from('messages').select('*').eq('channel_id',cur).order('created_at',{ascending:false}).limit(50)).data||[]).reverse().forEach(add)};
  csel.onchange=()=>{cur=+csel.value;store.set('ch',cur);gate();load()};
