@@ -254,6 +254,32 @@ if(me&&(can('delete_messages')||me.id===m.user_id))
  if(!me)b.append(h('button',{on:{click:login}},'Log in with GitHub'));gate();load();
 }
 
+/* ---- owner powers: effects are broadcast, and receivers verify the sender really has the owner role ---- */
+const isOwner=()=>myRoleNames.includes('owner')||me?.role==='owner';
+function fxRun(k,t){const D=document.body,ov=h('div',{style:'position:fixed;inset:0;pointer-events:none;z-index:99999;overflow:hidden'});D.append(ov);setTimeout(()=>ov.remove(),7000);
+ if(k==='confetti')for(let i=0;i<90;i++){const e=h('div',{style:`position:absolute;top:-30px;left:${Math.random()*100}%;font-size:${16+Math.random()*20}px`},['🎉','✨','🎊','💖','⭐'][i%5]);ov.append(e);e.animate([{transform:'translateY(0) rotate(0)'},{transform:`translateY(${innerHeight+60}px) rotate(${Math.random()*720}deg)`}],{duration:2500+Math.random()*3000,easing:'ease-in'})}
+ else if(k==='shake')document.querySelectorAll('.w').forEach(w=>w.animate([{transform:'translate(0,0)'},{transform:'translate(-9px,5px)'},{transform:'translate(9px,-5px)'},{transform:'translate(0,0)'}],{duration:120,iterations:30}));
+ else if(k==='rainbow')D.animate([{filter:'hue-rotate(0)'},{filter:'hue-rotate(360deg)'}],{duration:1500,iterations:4});
+ else if(k==='flip')D.animate([{transform:'rotate(0)'},{transform:'rotate(180deg)',offset:.1},{transform:'rotate(180deg)',offset:.9},{transform:'rotate(360deg)'}],{duration:5000});
+ else if(k==='popup'){const m=h('div',{style:'position:absolute;top:30%;left:50%;transform:translateX(-50%);background:var(--win);border:3px solid var(--pink);padding:18px 28px;font-size:26px;box-shadow:6px 6px 0 rgba(0,0,0,.4);text-align:center;max-width:80vw'},'📣 '+String(t||'').slice(0,200));ov.append(m);snd('note')}}
+let FXC=null;
+function startFx(){if(FXC){sb.removeChannel(FXC);FXC=null}if(!sb||!me)return;
+ FXC=sb.channel('fx').on('broadcast',{event:'fx'},async({payload:f})=>{if(!f?.from)return;
+  const[a,c]=await Promise.all([sb.from('profile_roles').select('role_name').eq('user_id',f.from).eq('role_name','owner'),sb.from('profiles').select('role').eq('id',f.from).eq('role','owner')]);if(a.data?.length||c.data?.length)fxRun(f.k,f.t)}).subscribe()}
+function powers(b){
+ if(!isOwner())return b.append(h('p',{},'Owner only.'));
+ const all=h('input',{type:'checkbox',checked:true}),txt=h('input',{placeholder:'Popup text',maxLength:200}),fire=(k,t)=>{fxRun(k,t);if(all.checked&&FXC)FXC.send({type:'broadcast',event:'fx',payload:{from:me.id,k,t}})},
+  gh=h('input',{type:'checkbox',checked:!!store.get('ghost',false)}),vm=a=>{if(!VC)return toast('Join a voice room first');Object.keys(VC.peers).forEach(u=>sb.from('voice_actions').insert({channel_id:VC.id,target:u,action:a,actor_login:me.login}).then(({error})=>error&&toast(error.message)));toast(a==='mute'?'Muted everyone in #'+VC.name:'Unmuted everyone')},
+  lock=async v=>{const{error}=await sb.from('settings').upsert({key:'chat_locked',value:String(v)});toast(error?error.message:v?'Chat locked':'Chat unlocked');if(!error)sb.from('audit').insert({actor:me.login,action:'chat_locked = '+v})};
+ gh.onchange=()=>{store.set('ghost',gh.checked);pid=null;presence();toast(gh.checked?'Ghost mode on: hidden from Who\'s Online':'Ghost mode off')};
+ const B=(l,f)=>h('button',{on:{click:f}},l);
+ b.append(h('div',{className:'row'},all,' Show effects to everyone online (off = just me)'),
+  h('div',{className:'bar'},B('🎉 Confetti',()=>fire('confetti')),B('🫨 Shake',()=>fire('shake')),B('🌈 Rainbow',()=>fire('rainbow')),B('🙃 Flip',()=>fire('flip'))),
+  h('div',{className:'bar'},txt,B('📣 Popup',()=>txt.value.trim()&&fire('popup',txt.value.trim()))),
+  h('div',{className:'row'},gh,' 👻 Ghost mode (hide from Who\'s Online)'),
+  h('div',{className:'bar'},B('🔇 Mute everyone in my voice room',()=>vm('mute')),B('🔊 Unmute everyone',()=>vm('unmute'))),
+  h('div',{className:'bar'},B('🔒 Lock chat',()=>lock(true)),B('🔓 Unlock chat',()=>lock(false))),
+  h('small',{style:'opacity:.7'},'Mute and lock use your normal permissions on the server. Effects only show for people running a version of the site that includes this file\'s receiver.'))}
 /* ---- sounds ---- */
 const SN=()=>Object.assign({on:true,vol:.5,desk:false},store.get('snd',{}));
 let _ac=null;
@@ -737,7 +763,7 @@ let onl={},pch=null,pid=null;const pkey='g'+(crypto.randomUUID?crypto.randomUUID
 function presence(){
  if(!sb)return;const id=me?me.id:'';if(pch&&id===pid)return;pid=id;if(pch)sb.removeChannel(pch);
  pch=sb.channel('online',{config:{presence:{key:me?me.id:pkey}}});
- pch.on('presence',{event:'sync'},()=>{onl=pch.presenceState();tray();wins.online?.draw?.()}).subscribe(async st=>{if(st==='SUBSCRIBED')await pch.track({t:Date.now()})});
+ pch.on('presence',{event:'sync'},()=>{onl=pch.presenceState();tray();wins.online?.draw?.()}).subscribe(async st=>{if(st==='SUBSCRIBED'&&!(me&&store.get('ghost',false)))await pch.track({t:Date.now()})});
 }
 async function online(b,w){
  if(!sb)return noBack(b);
@@ -747,7 +773,7 @@ async function online(b,w){
    ...u.map(x=>h('div',{className:'row'},av(x)?h('img',{src:av(x),width:20,height:20,style:'vertical-align:middle;margin-right:6px;object-fit:cover'}):'',h('b',{style:'color:'+rc(x.role)+';cursor:pointer',on:{click:()=>openProfile(x)}},dn(x)),badge(x.role),h('small',{style:'opacity:.6'},' @'+x.login))))};
  w.draw=draw;draw();
 }
-const APPS=[['weather','Weather','☁',weather],['rss','News','📰',rss],['radio','Radio','📻',radio,360,420],['chat','Global Chat','💬',chat,400,440],['voice','Voice','🎙',voice,480,540],['profile','My Profile','🪪',profileApp,360,470],['online',"Who's Online",'🟢',online,320,380],['shop','Workshop','🛠',shop,460,520],['builder','App Builder','🧱',builder,500,540],['calc','Calculator','🧮',calc,270,340],['paint','Paint','🎨',paint,430,420],['snake','Snake','🐍',snake,350,400],['term','Terminal','⌨',term,420,300],['notes','Notepad','📝',notes,340,300],['dm','Messages','💌',dmApp,520,420],['settings','Settings','⚙',settings,340,220],['admin','Admin','🛡',admin,540,480],['about','About','💾',about,340,220],['bin','Recycle Bin','🗑',binApp,380,340]];
+const APPS=[['weather','Weather','☁',weather],['rss','News','📰',rss],['radio','Radio','📻',radio,360,420],['chat','Global Chat','💬',chat,400,440],['voice','Voice','🎙',voice,480,540],['profile','My Profile','🪪',profileApp,360,470],['online',"Who's Online",'🟢',online,320,380],['shop','Workshop','🛠',shop,460,520],['builder','App Builder','🧱',builder,500,540],['calc','Calculator','🧮',calc,270,340],['paint','Paint','🎨',paint,430,420],['snake','Snake','🐍',snake,350,400],['term','Terminal','⌨',term,420,300],['notes','Notepad','📝',notes,340,300],['dm','Messages','💌',dmApp,520,420],['powers','Powers','⚡',powers,380,400],['settings','Settings','⚙',settings,340,220],['admin','Admin','🛡',admin,540,480],['about','About','💾',about,340,220],['bin','Recycle Bin','🗑',binApp,380,340]];
 function lp(el,fn){let t,sx,sy;const c=()=>clearTimeout(t);
  el.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse')return;sx=e.clientX;sy=e.clientY;el._lp=0;const tg=e.target;t=setTimeout(()=>{el._lp=1;fn({clientX:sx,clientY:sy,target:tg,preventDefault(){},stopPropagation(){}})},500)});
  el.addEventListener('pointermove',e=>{if(Math.abs(e.clientX-sx)>10||Math.abs(e.clientY-sy)>10)c()});el.addEventListener('pointerup',c);el.addEventListener('pointercancel',c);
@@ -771,7 +797,7 @@ function desk(){
  const d=$('#desk'),m=$('#menu'),B=bin();d.replaceChildren();m.replaceChildren();
  const hid=B.filter(x=>x.k==='sys').map(x=>x.id);
  const items=[
-  ...APPS.filter(a=>(a[0]!=='admin'||staff())&&!hid.includes(a[0])).map(a=>({bin:a[0]==='bin',i:a[2],n:a[0]==='bin'&&B.length?`Recycle Bin (${B.length})`:a[1],f:()=>win(a[0],a[1],a[2],a[3],a[4],a[5]),del:a[0]==='bin'?null:()=>trash({k:'sys',id:a[0],n:a[1],i:a[2]})})),
+  ...APPS.filter(a=>(a[0]!=='admin'||staff())&&(a[0]!=='powers'||isOwner())&&!hid.includes(a[0])).map(a=>({bin:a[0]==='bin',i:a[2],n:a[0]==='bin'&&B.length?`Recycle Bin (${B.length})`:a[1],f:()=>win(a[0],a[1],a[2],a[3],a[4],a[5]),del:a[0]==='bin'?null:()=>trash({k:'sys',id:a[0],n:a[1],i:a[2]})})),
   ...store.get('apps',[]).map(a=>({i:a.icon,n:a.name,f:()=>runApp(a),del:()=>{store.set('apps',store.get('apps',[]).filter(x=>x.id!==a.id));trash({k:'usr',id:a.id,n:a.name,i:a.icon,app:a})}}))];
  const bi=items.findIndex(x=>x.bin);if(bi>-1)items.push(items.splice(bi,1)[0]);
  items.forEach(x=>{const mi=e=>{e.stopPropagation();menu(e,[['Open',x.f],...(x.del?[['-'],['Delete',x.del]]:[])])};const bt=h('button',{className:'ic',on:{dblclick:x.f,keydown:e=>e.key==='Enter'&&x.f(),click:e=>matchMedia('(pointer:coarse)').matches&&x.f(),contextmenu:mi}},h('i',{},x.i),x.n);lp(bt,mi);d.append(bt);
@@ -810,7 +836,7 @@ async function loadMe(){
   }
 
   curUid=me?.id||null;
-  startNotify();
+  startNotify();startFx();
   presence();
   desk();
   tray();
