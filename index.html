@@ -1131,8 +1131,11 @@ function reportApp(b,w){
    body=h('textarea',{rows:5,maxLength:1000,placeholder:'What happened?'}),file=h('input',{type:'file',accept:'image/png,image/jpeg,image/gif,image/webp'}),btn=h('button',{},'Submit report');
   btn.onclick=async()=>{const t=body.value.trim();if(!t)return toast('Describe what happened');btn.disabled=true;let path=null;const f=file.files[0];
    if(f){path=await repUp(f);if(!path){btn.disabled=false;return}}
+   /* count the reporter's own open reports first, so the 5-report message only shows when it is really true */
+   const{count,error:ce}=await sb.from('reports').select('id',{count:'exact',head:true}).eq('reporter_id',me.id).in('status',['open','reviewing']);
+   if(!ce&&count>=5){if(path)sb.storage.from('report-images').remove([path]);btn.disabled=false;return toast('You have '+count+' open reports. Wait for staff to handle them.')}
    const{error}=await sb.from('reports').insert({reporter_id:me.id,reporter_login:me.login,target_login:tg.value.trim().replace(/^@/,'').slice(0,60)||null,category:cat.value,body:t,image_path:path});
-   btn.disabled=false;if(error)return toast(/row-level|policy/.test(error.message)?'You can have at most 5 open reports. Wait for staff to handle them.':error.message);
+   btn.disabled=false;if(error){if(path)sb.storage.from('report-images').remove([path]);console.error('Report insert failed:',error);return toast(/row-level|policy/.test(error.message)?'The server rejected this report ('+(ce?'could not count your reports; ':count+' open reports counted; ')+'policy: '+error.message+')':error.message)}
    toast('Report sent');repChanged();list()};
   pane.replaceChildren(h('div',{className:'bar'},h('button',{on:{click:list}},'← Back')),h('div',{},'Category'),cat,h('div',{},'About (optional)'),tg,h('div',{},'Details'),body,
    h('div',{},'Screenshot (optional, 3 MB)'),file,h('div',{style:'margin-top:0.375rem'},btn))};
