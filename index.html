@@ -888,10 +888,11 @@ function builder(b){
  bg.oninput=fg.oninput=()=>prev.srcdoc=code();
  b.append(h('div',{className:'bar'},nm,ic,bg,fg),h('div',{className:'bar'},sel,h('button',{on:{click:()=>{bl.push([sel.value,'','']);draw()}}},'Add block')),list,h('div',{className:'bar'},h('button',{on:{click:()=>install(mk())}},'Save to desktop'),h('button',{on:{click:()=>publish(mk())}},'Publish'),h('button',{on:{click:()=>win('shop2','JS Shop','🛒',x=>shop(x,code()),500,560)}},'Edit code')),prev);draw();
 }
+let calcBroken=false; /* in memory only: resets when the page is refreshed */
 function calc(b){
  const d=h('input',{readOnly:true,style:'width:100%;font-size:1.75rem;text-align:right'}),g=h('div',{style:'display:grid;grid-template-columns:repeat(4,1fr);gap:0.25rem;margin-top:0.375rem'});let e='';
  '7 8 9 / 4 5 6 * 1 2 3 - 0 . = +'.split(' ').concat(['C','(',')','⌫']).forEach(k=>g.append(h('button',{style:'font-size:1.5rem;padding:0.5rem',on:{click:()=>{
-  if(e==='error')e='';if(k==='C')e='';else if(k==='⌫')e=e.slice(0,-1);else if(k==='='){try{if(/^[\d+\-*/.() ]+$/.test(e))e=String(+Function('return '+e)().toFixed(10))}catch{e='error'}}else e+=k;d.value=e}}},k)));
+  if(e==='error')e='';if(k==='C')e='';else if(k==='⌫')e=e.slice(0,-1);else if(k==='='){try{if(/^[\d+\-*/.() ]+$/.test(e)){const v=Function('return '+e)();if(!isFinite(v)){calcBroken=true;const w=wins.calc;if(w)w.el.querySelector('.tb span button:last-child').click();desk();return toast('Division by zero! The calculator crashed.')}e=String(+v.toFixed(10))}}catch{e='error'}}else e+=k;d.value=e}}},k)));
  b.append(d,g);
 }
 function paint(b){
@@ -1219,7 +1220,7 @@ function desk(){
  const d=$('#desk'),m=$('#menu'),B=bin();d.replaceChildren();m.replaceChildren();
  const hid=B.filter(x=>x.k==='sys').map(x=>x.id);
  const items=[
-  ...APPS.filter(a=>(a[0]!=='admin'||staff())&&(a[0]!=='powers'||hasPowers())&&!hid.includes(a[0])).map(a=>({key:'a:'+a[0],bin:a[0]==='bin',i:a[2],n:a[0]==='bin'&&B.length?'Recycle Bin ('+B.length+')':a[1],f:()=>win(a[0],a[1],a[2],a[3],a[4],a[5]),del:a[0]==='bin'?null:()=>trash({k:'sys',id:a[0],n:a[1],i:a[2]})})),
+  ...APPS.filter(a=>(a[0]!=='admin'||staff())&&(a[0]!=='powers'||hasPowers())&&!hid.includes(a[0])&&!(a[0]==='calc'&&calcBroken)).map(a=>({key:'a:'+a[0],bin:a[0]==='bin',i:a[2],n:a[0]==='bin'&&B.length?'Recycle Bin ('+B.length+')':a[1],f:()=>win(a[0],a[1],a[2],a[3],a[4],a[5]),del:a[0]==='bin'?null:()=>trash({k:'sys',id:a[0],n:a[1],i:a[2]})})),
   ...store.get('apps',[]).map(a=>({key:'u:'+a.id,i:a.icon,n:a.name,f:()=>runApp(a),del:()=>{store.set('apps',store.get('apps',[]).filter(x=>x.id!==a.id));trash({k:'usr',id:a.id,n:a.name,i:a.icon,app:a})}})),
   ...FILES().map(f=>({key:'f:'+f.id,i:f.k==='img'?'🖼':'📄',n:f.name,f:()=>openFile(f.id),
    x:[['Send...',()=>{const g=FILES().find(y=>y.id===f.id);if(g)sendDialog({id:g.id,kind:g.k,name:g.name,data:g.data})}],['Rename',()=>renameFile(f.id)],['Download',()=>dlFile(FILES().find(y=>y.id===f.id)||f)]],del:()=>delFile(f.id)}))];
