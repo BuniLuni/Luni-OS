@@ -716,25 +716,43 @@ async function voice(b,w){
  draw();
 }
 
-/* ---- user apps + workshop ---- */
+/* ---- user apps + JS Shop ---- */
 const TPL='<!doctype html>\n<body style="font-family:sans-serif;text-align:center">\n<h1>Hello!</h1>\n<button onclick="this.textContent=\'clicked\'">Click me</button>\n</body>';
 function install(a){const l=store.get('apps',[]);if(!l.find(x=>x.id===String(a.id)))l.push({id:String(a.id),name:a.name,icon:a.icon||'📦',code:a.code});store.set('apps',l);desk();toast('Installed: '+a.name)}
-const runApp=a=>win('u'+a.id,a.name,a.icon,b=>{b.style.padding='0';b.append(h('iframe',{sandbox:'allow-scripts',srcdoc:a.code,style:'width:100%;height:100%;border:0;background:#fff'}))});
+const runApp=a=>win('u'+a.id,a.name,a.icon,b=>{b.style.padding='0';const jc=jslParse(a.code);if(jc)return b.append(jslFrame(jc));b.append(h('iframe',{sandbox:'allow-scripts',srcdoc:a.code,style:'width:100%;height:100%;border:0;background:#fff'}))});
+const isJsl=c=>typeof c==='string'&&c.startsWith(JSL_MAGIC);
+async function publishApp(a){
+ if(!sb)return toast('Backend not set up');if(!me)return toast('Log in first');
+ if(isJsl(a.code)){if(!can('share_jslinux'))return toast('You need the "Share JS Linux apps" permission to publish this');if(!jslParse(a.code))return toast('Invalid JS Linux app')}
+ else if(isJsl(a.code.trimStart()))return toast('Normal apps cannot start with a JS Linux header');
+ const{error}=await sb.from('apps').insert({author_id:me.id,author_login:me.login,name:a.name,icon:a.icon,code:a.code});
+ toast(error?(/policy/.test(error.message)&&isJsl(a.code)?'You need the "Share JS Linux apps" permission':error.message):'Published to JS Shop!')}
 function shop(b,pre){
  const bar=h('div',{className:'bar'}),pane=h('div');
  const make=()=>{
   const nm=h('input',{placeholder:'App name',maxLength:30}),ic=h('input',{placeholder:'Icon',maxLength:2,style:'flex:0 0 3.75rem'}),code=h('textarea',{rows:9,value:pre||TPL}),prev=h('iframe',{sandbox:'allow-scripts',className:'frame'});
   const run=()=>prev.srcdoc=code.value,mk=()=>({id:'u'+Date.now(),name:nm.value.trim()||'Untitled',icon:ic.value||'📦',code:code.value});
-  const pub=async()=>{if(!sb)return toast('Backend not set up');if(!me)return toast('Log in first');
-   const a=mk(),{error}=await sb.from('apps').insert({author_id:me.id,author_login:me.login,name:a.name,icon:a.icon,code:a.code});toast(error?error.message:'Published!')};
-  pane.replaceChildren(h('div',{className:'bar'},nm,ic),code,h('div',{className:'bar'},h('button',{on:{click:run}},'Run'),h('button',{on:{click:()=>install(mk())}},'Save to desktop'),h('button',{on:{click:pub}},'Publish')),prev);run()};
+  pane.replaceChildren(h('div',{className:'bar'},nm,ic),code,h('div',{className:'bar'},h('button',{on:{click:run}},'Run'),h('button',{on:{click:()=>install(mk())}},'Save to desktop'),h('button',{on:{click:()=>publishApp(mk())}},'Publish')),prev);run()};
+ const makeLinux=()=>{
+  const ok=can('share_jslinux');
+  const nm=h('input',{placeholder:'App name',maxLength:30}),ic=h('input',{placeholder:'Icon',maxLength:2,value:'🐧',style:'flex:0 0 3.75rem'}),
+   vm=h('select',{},...Object.entries(JSL_VMS).map(([k,v])=>h('option',{value:v},k)),h('option',{value:'custom'},'Custom config URL...')),
+   url=h('input',{placeholder:'https://example.com/my-vm.cfg (must allow CORS)',style:'display:none'}),mem=h('select',{},...[64,128,192,256,512].map(m=>h('option',{value:m,selected:m===128},m+' MB'))),
+   note=h('p',{},ok?'You have permission to share JS Linux apps.':'You can make and save JS Linux apps for yourself, but publishing needs the "Share JS Linux apps" permission from a role.');
+  vm.onchange=()=>url.style.display=vm.value==='custom'?'':'none';
+  const mk=()=>{const cfg=vm.value==='custom'?url.value.trim():vm.value;return{id:'u'+Date.now(),name:nm.value.trim()||'Untitled',icon:ic.value||'🐧',code:jslEncode({cfg,mem:+mem.value})}};
+  const valid=a=>jslParse(a.code)?true:(toast('Config URL must start with https://'),false);
+  pane.replaceChildren(note,h('div',{className:'bar'},nm,ic),h('div',{className:'bar'},vm,mem),url,h('div',{className:'bar'},
+   h('button',{on:{click:()=>{const a=mk();if(valid(a))runApp(a)}}},'Test'),
+   h('button',{on:{click:()=>{const a=mk();if(valid(a))install(a)}}},'Save to desktop'),
+   h('button',{disabled:!ok,title:ok?'':'Requires the Share JS Linux apps permission',on:{click:()=>{const a=mk();if(valid(a))publishApp(a)}}},'Publish')))};
  const browse=async()=>{if(!sb)return pane.replaceChildren(h('p',{},'Backend not set up yet.'));pane.textContent='Loading...';
   const d=(await sb.from('apps').select('*').order('created_at',{ascending:false}).limit(50)).data||[];
-  pane.replaceChildren(...(d.length?d.map(a=>h('div',{className:'row'},`${a.icon||'📦'} ${a.name} by ${a.author_login} `,h('button',{on:{click:()=>install(a)}},'Install'),me&&(me.id===a.author_id||can('delete_apps'))?h('button',{on:{click:async()=>{await sb.from('apps').delete().eq('id',a.id);browse()}}},'Delete'):'')):[h('p',{},'Nothing published yet. Be the first.')]))};
- bar.append(h('button',{on:{click:make}},'Make an app'),h('button',{on:{click:browse}},'Browse community'));
+  pane.replaceChildren(...(d.length?d.map(a=>{const j=isJsl(a.code);return h('div',{className:'row'},`${a.icon||'📦'} ${a.name}${j?' 🐧':''} by ${a.author_login} `,h('button',{disabled:j&&!jslParse(a.code),on:{click:()=>install(a)}},'Install'),me&&(me.id===a.author_id||can('delete_apps'))?h('button',{on:{click:async()=>{await sb.from('apps').delete().eq('id',a.id);browse()}}},'Delete'):'')}):[h('p',{},'Nothing published yet. Be the first.')]))};
+ bar.append(h('button',{on:{click:make}},'Make an app'),h('button',{on:{click:makeLinux}},'Make a JS Linux app'),h('button',{on:{click:browse}},'Browse JS Shop'));
  b.append(bar,pane);make();
 }
-const PERMS={chat:'Send messages',images:'Upload images',create_channels:'Create channels',manage_channels:'Delete channels and set who can post',voice_mod:'Kick and force-mute in voice channels',screenshare:'Share screen in voice channels',delete_messages:'Delete any message',publish_apps:'Publish apps',delete_apps:'Delete any app',manage_emojis:'Manage custom emojis',ban:'Ban / unban',manage_roles:'Create roles and assign them',announce:'Post announcements',site_settings:'Change site settings',view_audit:'View audit log',bypass:'Bypass locks and size limits',admin_panel:'Open the admin panel',notify:'Send notifications to users'};
+const PERMS={chat:'Send messages',images:'Upload images',create_channels:'Create channels',manage_channels:'Delete channels and set who can post',voice_mod:'Kick and force-mute in voice channels',screenshare:'Share screen in voice channels',delete_messages:'Delete any message',publish_apps:'Publish apps',share_jslinux:'Share JS Linux apps in JS Shop',delete_apps:'Delete any app',manage_emojis:'Manage custom emojis',ban:'Ban / unban',manage_roles:'Create roles and assign them',announce:'Post announcements',site_settings:'Change site settings',view_audit:'View audit log',bypass:'Bypass locks and size limits',admin_panel:'Open the admin panel',notify:'Send notifications to users'};
 async function admin(b){
  if(!staff())return b.append('Staff only.');
  const pane=h('div'),bar=h('div',{className:'bar'}),log=a=>sb.from('audit').insert({actor:me.login,action:a});
@@ -855,20 +873,20 @@ async function admin(b){
  keys.forEach(k=>bar.append(h('button',{on:{click:()=>{pane.textContent='Loading...';T[k]()}}},k)));
  b.append(bar,pane);T[keys[0]]();
 }
-function about(b){b.append(h('h2',{},"Luni's dumbass Thing"),h('p',{},'A tiny operating system that lives in your browser. Built by BuniLuni.'),h('p',{},'Make an app in the Workshop, publish it, and everyone can install it.'),h('p',{},'Radius did it first and better (',h('a',{href:'https://radiusos.ignorelist.com/',target:'_blank',rel:'noopener noreferrer'},'Radius OS'),')'))}
+function about(b){b.append(h('h2',{},"Luni's dumbass Thing"),h('p',{},'A tiny operating system that lives in your browser. Built by BuniLuni.'),h('p',{},'Make an app in JS Shop, publish it, and everyone can install it.'),h('p',{},'Radius did it first and better (',h('a',{href:'https://radiusos.ignorelist.com/',target:'_blank',rel:'noopener noreferrer'},'Radius OS'),')'))}
 
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const BT={Heading:['Text'],Paragraph:['Text'],Button:['Label','Message shown on click'],Counter:['Label'],Link:['Link text','URL (https://...)'],Image:['Image URL (https://...)'],Divider:[]};
 function gen(bg,fg,bl){const u=v=>/^https?:\/\//i.test(v)?esc(v):'#';
  return `<!doctype html><meta charset=utf-8><body style="margin:0;padding:1.25rem;font-family:sans-serif;text-align:center;background:${bg};color:${fg}">`+bl.map(([t,a,c])=>({Heading:`<h1>${esc(a)}</h1>`,Paragraph:`<p>${esc(a)}</p>`,Button:`<p><button data-m="${esc(c)}" onclick="this.nextElementSibling.textContent=' '+this.dataset.m">${esc(a)}</button><span></span></p>`,Counter:`<p><button data-l="${esc(a)}" onclick="this.n=(this.n||0)+1;this.textContent=this.dataset.l+': '+this.n">${esc(a)}: 0</button></p>`,Link:`<p><a style="color:inherit" href="${u(c)}" target="_blank" rel="noopener">${esc(a)}</a></p>`,Image:`<p><img src="${u(a)}" style="max-width:100%"></p>`,Divider:'<hr>'}[t])).join('')}
-async function publish(a){if(!sb)return toast('Backend not set up');if(!me)return toast('Log in first');const{error}=await sb.from('apps').insert({author_id:me.id,author_login:me.login,name:a.name,icon:a.icon,code:a.code});toast(error?error.message:'Published!')}
+const publish=publishApp;
 function builder(b){
  const nm=h('input',{placeholder:'App name',maxLength:30}),ic=h('input',{placeholder:'Icon',maxLength:2,style:'flex:0 0 3.75rem'}),bg=h('input',{type:'color',value:'#2b1b4d'}),fg=h('input',{type:'color',value:'#f4efff'}),sel=h('select',{},...Object.keys(BT).map(k=>h('option',{},k))),list=h('div'),prev=h('iframe',{sandbox:'allow-scripts',className:'frame'});
  const bl=[['Heading','My cool app','']];
  const code=()=>gen(bg.value,fg.value,bl),mk=()=>({id:'u'+Date.now(),name:nm.value.trim()||'Untitled',icon:ic.value||'📦',code:code()});
  const draw=()=>{list.replaceChildren(...bl.map((x,i)=>h('div',{className:'row'},h('b',{},x[0]+' '),...BT[x[0]].map((p,j)=>h('input',{placeholder:p,value:x[j+1],on:{input:e=>{x[j+1]=e.target.value;prev.srcdoc=code()}}})),h('button',{on:{click:()=>{if(i){[bl[i-1],bl[i]]=[bl[i],bl[i-1]];draw()}}}},'↑'),h('button',{on:{click:()=>{bl.splice(i,1);draw()}}},'x'))));prev.srcdoc=code()};
  bg.oninput=fg.oninput=()=>prev.srcdoc=code();
- b.append(h('div',{className:'bar'},nm,ic,bg,fg),h('div',{className:'bar'},sel,h('button',{on:{click:()=>{bl.push([sel.value,'','']);draw()}}},'Add block')),list,h('div',{className:'bar'},h('button',{on:{click:()=>install(mk())}},'Save to desktop'),h('button',{on:{click:()=>publish(mk())}},'Publish'),h('button',{on:{click:()=>win('shop2','Workshop','🛠',x=>shop(x,code()),460,520)}},'Edit code')),prev);draw();
+ b.append(h('div',{className:'bar'},nm,ic,bg,fg),h('div',{className:'bar'},sel,h('button',{on:{click:()=>{bl.push([sel.value,'','']);draw()}}},'Add block')),list,h('div',{className:'bar'},h('button',{on:{click:()=>install(mk())}},'Save to desktop'),h('button',{on:{click:()=>publish(mk())}},'Publish'),h('button',{on:{click:()=>win('shop2','JS Shop','🛒',x=>shop(x,code()),500,560)}},'Edit code')),prev);draw();
 }
 function calc(b){
  const d=h('input',{readOnly:true,style:'width:100%;font-size:1.75rem;text-align:right'}),g=h('div',{style:'display:grid;grid-template-columns:repeat(4,1fr);gap:0.25rem;margin-top:0.375rem'});let e='';
@@ -896,14 +914,29 @@ function snake(b,w){
  const turn=k=>{if(k&&(k[0]+d[0]||k[1]+d[1]))d=k};w.el.tabIndex=0;w.el.onkeydown=e=>{if(K[e.key]){turn(K[e.key]);e.preventDefault()}};
  w.onclose=()=>clearInterval(t);b.append(sc,c,h('div',{className:'bar',style:'justify-content:center;margin-top:0.5rem'},...[['◀',K.ArrowLeft],['▲',K.ArrowUp],['▼',K.ArrowDown],['▶',K.ArrowRight]].map(([l,k])=>h('button',{style:'font-size:1.625rem;padding:0.375rem 1rem',on:{pointerdown:e=>{e.preventDefault();turn(k)}}},l))));start();w.el.focus();
 }
-function term(b){
- const out=h('div',{style:'white-space:pre-wrap'}),inp=h('input',{style:'width:100%;background:#0a0d1a;color:#6ff2c5',placeholder:'type help'});
- const say=t=>{out.append(t+'\n');b.scrollTop=1e9};
- const C={help:()=>say('help date whoami apps open <app> echo <text> neofetch clear'),date:()=>say(new Date().toString()),whoami:()=>say(me?`${me.login} [${me.role}]`:'guest'),apps:()=>say(APPS.map(a=>a[0]).join(' ')),echo:a=>say(a),clear:()=>out.replaceChildren(),
-  neofetch:()=>say("luni's dumbass thing\n  kernel: vibes 1.0\n  shell: sorta\n  apps: "+APPS.length),
-  open:a=>{const x=APPS.find(y=>y[0]===a||y[1].toLowerCase()===a.toLowerCase());x?win(x[0],x[1],x[2],x[3],x[4],x[5]):say('no such app')}};
- inp.onkeydown=e=>{if(e.key!=='Enter')return;const[c,...r]=inp.value.trim().split(' ');say('> '+inp.value);(C[c]||(()=>c&&say('unknown command: '+c)))(r.join(' '));inp.value=''};
- b.style.background='#0a0d1a';b.style.color='#6ff2c5';b.append(out,inp);inp.focus();
+/* ---- JS Linux (Fabrice Bellard's jslinux, embedded) ---- */
+const JSL_BASE='https://bellard.org/jslinux/vm.html';
+const JSL_VMS={'Alpine Linux (x86)':'alpine-x86.cfg','Alpine Linux (x86_64)':'alpine-x86_64.cfg','Buildroot Linux (x86)':'buildroot-x86.cfg','Buildroot Linux (RISC-V)':'buildroot-riscv64.cfg','FreeDOS':'freedos.cfg','Windows 2000':'win2k.cfg'};
+const JSL_MAGIC='<!--jslinux:';
+/* A JS Linux app is stored in the normal apps table: code = <!--jslinux:{json}--> */
+const jslEncode=c=>JSL_MAGIC+JSON.stringify(c).replace(/-->/g,'--\\u003e')+'-->';
+function jslParse(code){
+ if(typeof code!=='string'||!code.startsWith(JSL_MAGIC)||!code.endsWith('-->'))return null;
+ try{
+  const c=JSON.parse(code.slice(JSL_MAGIC.length,-3)),mem=Math.min(512,Math.max(32,parseInt(c.mem,10)||128));
+  if(c.cfg&&Object.values(JSL_VMS).includes(c.cfg))return{cfg:c.cfg,mem};
+  if(typeof c.cfg==='string'&&/^https:\/\/[^\s"'<>]+$/i.test(c.cfg))return{cfg:c.cfg,mem};
+ }catch{}
+ return null;
+}
+const jslUrl=c=>JSL_BASE+'?url='+encodeURIComponent(c.cfg)+'&mem='+c.mem;
+const jslFrame=c=>h('iframe',{src:jslUrl(c),allow:'clipboard-read; clipboard-write',referrerPolicy:'no-referrer',sandbox:'allow-scripts allow-same-origin allow-forms allow-popups',style:'width:100%;height:100%;border:0;background:#000'});
+function jslinuxApp(b){
+ b.style.padding='0';b.style.display='flex';b.style.flexDirection='column';
+ const sel=h('select',{},...Object.keys(JSL_VMS).map(k=>h('option',{value:JSL_VMS[k]},k))),mem=h('select',{},...[64,128,192,256,512].map(m=>h('option',{value:m,selected:m===128},m+' MB'))),box=h('div',{style:'flex:1;min-height:0;background:#000;color:#6ff2c5;display:flex;align-items:center;justify-content:center;text-align:center;padding:1rem'});
+ const boot=()=>box.replaceChildren(jslFrame({cfg:sel.value,mem:+mem.value}));
+ box.textContent='Pick a system and press Boot. Runs fully in your browser (JS Linux by Fabrice Bellard).';
+ b.append(h('div',{className:'bar',style:'padding:.375rem'},sel,mem,h('button',{on:{click:boot}},'Boot'),h('button',{on:{click:()=>box.textContent='Powered off.'}},'Power off')),box);
 }
 const WP={Grape:['#4a2d85','#2b1b4d'],Teal:['#1d6b6b','#0d2e35'],Cherry:['#8a1f4f','#2a0b1c'],Night:['#222a44','#0a0d1a'],Slime:['#2f7d3a','#0d2a14']};
 function applySettings(){const s=store.get('set',{wp:'Grape',scan:true}),c=WP[s.wp]||WP.Grape;document.documentElement.style.setProperty('--ui',s.ui||1);document.body.style.background=`radial-gradient(circle at 30% 20%,${c[0]},${c[1]} 60%)`;document.body.classList.toggle('noscan',!s.scan)}
@@ -1162,7 +1195,7 @@ async function online(b,w){
    ...u.map(x=>h('div',{className:'row'},av(x)?h('img',{src:av(x),width:20,height:20,style:'vertical-align:middle;margin-right:0.375rem;object-fit:cover'}):'',h('b',{style:'color:'+rc(x.role)+';cursor:pointer',on:{click:()=>openProfile(x)}},dn(x)),badge(x.role),h('small',{style:'opacity:.6'},' @'+x.login),stLine(onl[x.id]?.[0],x.id))))};
  w.draw=draw;draw();
 }
-const APPS=[['weather','Weather','☁',weather],['rss','News','📰',rss],['radio','Radio','📻',radio,360,420],['chat','Global Chat','💬',chat,400,440],['voice','Voice','🎙',voice,480,540],['profile','My Profile','🪪',profileApp,360,470],['online',"Who's Online",'🟢',online,320,380],['shop','Workshop','🛠',shop,460,520],['builder','App Builder','🧱',builder,500,540],['calc','Calculator','🧮',calc,270,340],['paint','Paint','🎨',paint,430,420],['snake','Snake','🐍',snake,350,400],['term','Terminal','⌨',term,420,300],['notes','Notepad','📝',notes,340,300],['levels','Levels','⭐',levelsApp,360,440],['clicker','Cookie Clicker','🍪',clicker,360,480],['dm','Messages','💌',dmApp,520,420],['powers','Powers','⚡',powers,400,480],['groups','Group Chats','👥',groupsApp,540,440],['report','Report','🚩',reportApp,440,480],['status','Status','🟢',statusApp,340,540],['settings','Settings','⚙',settings,340,220],['admin','Admin','🛡',admin,540,480],['about','About','💾',about,340,220],['bin','Recycle Bin','🗑',binApp,380,340]];
+const APPS=[['weather','Weather','☁',weather],['rss','News','📰',rss],['radio','Radio','📻',radio,360,420],['chat','Global Chat','💬',chat,400,440],['voice','Voice','🎙',voice,480,540],['profile','My Profile','🪪',profileApp,360,470],['online',"Who's Online",'🟢',online,320,380],['shop','JS Shop','🛒',shop,500,560],['builder','App Builder','🧱',builder,500,540],['calc','Calculator','🧮',calc,270,340],['paint','Paint','🎨',paint,430,420],['snake','Snake','🐍',snake,350,400],['term','JS Linux','🐧',jslinuxApp,720,520],['notes','Notepad','📝',notes,340,300],['levels','Levels','⭐',levelsApp,360,440],['clicker','Cookie Clicker','🍪',clicker,360,480],['dm','Messages','💌',dmApp,520,420],['powers','Powers','⚡',powers,400,480],['groups','Group Chats','👥',groupsApp,540,440],['report','Report','🚩',reportApp,440,480],['status','Status','🟢',statusApp,340,540],['settings','Settings','⚙',settings,340,220],['admin','Admin','🛡',admin,540,480],['about','About','💾',about,340,220],['bin','Recycle Bin','🗑',binApp,380,340]];
 function lp(el,fn){let t,sx,sy;const c=()=>clearTimeout(t);
  el.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse')return;sx=e.clientX;sy=e.clientY;el._lp=0;const tg=e.target;t=setTimeout(()=>{el._lp=1;fn({clientX:sx,clientY:sy,target:tg,preventDefault(){},stopPropagation(){}})},500)});
  el.addEventListener('pointermove',e=>{if(Math.abs(e.clientX-sx)>10||Math.abs(e.clientY-sy)>10)c()});el.addEventListener('pointerup',c);el.addEventListener('pointercancel',c);
