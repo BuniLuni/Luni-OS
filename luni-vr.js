@@ -37,6 +37,7 @@ async function enter(){
  init();
  try{session=await navigator.xr.requestSession('immersive-vr',{optionalFeatures:['local-floor','bounded-floor','hand-tracking']})}catch(e){toast('Could not start VR: '+e.message);return}
  session.addEventListener('end',()=>{session=null;rd.setAnimationLoop(null);mo.disconnect();[...P.keys()].forEach(drop);kbHide();grab=null;btn.textContent='🥽 VR'});
+ rd.xr.setFramebufferScaleFactor(1.3);if(rd.xr.setFoveation)rd.xr.setFoveation(0);
  await rd.xr.setSession(session);
  btn.textContent='🥽 Exit VR';home=null;fr=0;uiOn=true;envKey='';layKey='';
  mo.observe(document.body,{subtree:true,childList:true,attributes:true,characterData:true});
@@ -49,7 +50,7 @@ function init(){
  scene=new THREE.Scene();cam=new THREE.PerspectiveCamera(70,1,.1,200);envG=new THREE.Group();scene.add(envG);
  RC=new THREE.Raycaster();TM=new THREE.Matrix4();
  kb={kind:'kb',on:false,sym:0,caps:0,hv:'',rg:[],dirty:1};kb.cv=document.createElement('canvas');kb.cv.width=1024;kb.cv.height=420;kb.cx=kb.cv.getContext('2d');
- kb.tex=new THREE.CanvasTexture(kb.cv);kb.tex.encoding=THREE.sRGBEncoding;
+ kb.tex=new THREE.CanvasTexture(kb.cv);kb.tex.encoding=THREE.sRGBEncoding;kb.tex.minFilter=THREE.LinearFilter;kb.tex.generateMipmaps=false;
  kb.mesh=new THREE.Mesh(new THREE.PlaneGeometry(.8,.8*420/1024),new THREE.MeshBasicMaterial({map:kb.tex,transparent:true,toneMapped:false}));kb.mesh.visible=false;kb.mesh.userData.p=kb;scene.add(kb.mesh);
  for(let i=0;i<2;i++){
   const c=rd.xr.getController(i);
@@ -94,10 +95,10 @@ function cl(o,top,W,H){
 function fit(p,W,H,sc){const cw=Math.max(1,W*sc|0),ch=Math.max(1,H*sc|0);
  if(p.cw!==cw||p.ch!==ch){p.cw=cw;p.ch=ch;p.base=document.createElement('canvas');p.base.width=cw;p.base.height=ch;p.bc=p.base.getContext('2d');
   p.cv=document.createElement('canvas');p.cv.width=cw;p.cv.height=ch;p.cx=p.cv.getContext('2d');if(p.tex)p.tex.dispose();
-  p.tex=new THREE.CanvasTexture(p.cv);p.tex.encoding=THREE.sRGBEncoding;p.mesh.material.map=p.tex;p.mesh.material.needsUpdate=true}
+  p.tex=new THREE.CanvasTexture(p.cv);p.tex.encoding=THREE.sRGBEncoding;p.tex.minFilter=THREE.LinearFilter;p.tex.generateMipmaps=false;p.tex.anisotropy=rd.capabilities.getMaxAnisotropy();p.mesh.material.map=p.tex;p.mesh.material.needsUpdate=true}
  p.W=W;p.H=H;p.sc=sc}
 async function snap(p){
- const el=p.el,W=Math.max(1,el.offsetWidth),H=Math.max(1,el.offsetHeight),sc=Math.min(1.5,2048/Math.max(W,H));
+ const el=p.el,W=Math.max(1,el.offsetWidth),H=Math.max(1,el.offsetHeight),sc=Math.max(1,Math.min(1100*scl(p),3072/Math.max(W,H),3));
  const x=new XMLSerializer().serializeToString(cl(el,1,W,H)).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g,'');
  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${W*sc|0}" height="${H*sc|0}" viewBox="0 0 ${W} ${H}"><foreignObject width="${W}" height="${H}"><style xmlns="http://www.w3.org/1999/xhtml">${FONT}</style>${x}</foreignObject></svg>`;
  const im=new Image();await new Promise((ok,no)=>{im.onload=ok;im.onerror=()=>no(new Error('render'));im.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg)});
@@ -216,7 +217,7 @@ function frame(){
  const now=performance.now();fr++;
  if(!home&&fr>3)recenter();
  if(envKey!==V.env+V.light){envKey=V.env+V.light;env()}
- if(layKey!==V.size+V.dist){layKey=V.size+V.dist;P.forEach(place)}
+ if(layKey!==V.size+V.dist){layKey=V.size+V.dist;P.forEach(p=>{place(p);p.dirty=true})}
  if(fr%15===1)sync();if(spin)spin.rotation.y+=.0006;
  const xc=rd.xr.getCamera(cam),head=hp().setFromMatrixPosition(xc.matrixWorld);
  for(const p of P.values()){if(now-p.t>2000&&!busy)p.dirty=true;p.kk=scl(p);p.mesh.scale.set(p.W*p.kk,p.H*p.kk,1);p.mesh.visible=uiOn&&!!p.cx;if(p.vid&&p.cx&&now-(p.vt||0)>60){comp(p);p.vt=now}}
