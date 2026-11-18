@@ -32,9 +32,13 @@ textarea{width:100%;font-family:monospace;font-size:0.875rem}
 .frame{width:100%;height:12.5rem;border:2px solid var(--ink);background:#fff}
 .msg{padding:2px 0;word-break:break-word}.r-owner{color:var(--pink)}.r-admin{color:#d0541c}.r-mod{color:#1f8f6a}
 #tb{position:absolute;left:0;right:0;bottom:0;height:calc(2.5rem + env(safe-area-inset-bottom,0px));background:var(--win);border-top:2px solid var(--hi);display:flex;align-items:center;gap:0.375rem;padding:0 0.375rem env(safe-area-inset-bottom,0px);z-index:9000}
+html.vr{background:#000;perspective:1100px;perspective-origin:50% 50%}
+body.vr{transform-style:preserve-3d;transform:rotateY(var(--vry,0deg)) rotateX(var(--vrx,0deg)) scale(.92);transform-origin:50% 50%;will-change:transform;box-shadow:0 0 120px 40px rgba(0,0,0,.8) inset}
+body.vr .w{transform:translateZ(55px)}body.vr #tb{transform:translateZ(95px)}body.vr #menu{transform:translateZ(110px)}body.vr #ann{transform:translateZ(80px)}
+#vrbtn{flex:0 0 auto;white-space:nowrap}
 #tasks{flex:1;display:flex;gap:0.25rem;overflow:hidden}#tasks button{max-width:8.75rem;overflow:hidden;white-space:nowrap}
-#menu{position:absolute;left:0.25rem;bottom:calc(2.625rem + env(safe-area-inset-bottom,0px));background:var(--win);border:2px solid;border-color:var(--hi) var(--ink) var(--ink) var(--hi);z-index:9001;display:none;min-width:11.875rem}
-#menu.on{display:block}#menu button{display:block;width:100%;text-align:left;border:0;padding:0.3125rem 0.625rem}#menu button:hover{background:var(--pink);color:#fff}
+#menu{position:absolute;left:0.25rem;bottom:calc(2.625rem + env(safe-area-inset-bottom,0px));background:var(--win);border:2px solid;border-color:var(--hi) var(--ink) var(--ink) var(--hi);z-index:9001;display:none;min-width:11.875rem;max-height:calc(2.25rem*5 + 4px);overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--lo) var(--win)}
+#menu.on{display:block}#menu button{display:block;width:100%;height:2.25rem;text-align:left;border:0;padding:0.3125rem 0.625rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#menu button:hover{background:var(--pink);color:#fff}
 #toast{position:fixed;top:0.625rem;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--mint);padding:0.25rem 0.75rem;z-index:10000;display:none}
 #ann{position:absolute;top:0;left:0;right:0;background:var(--pink);color:#fff;padding:0.25rem 0.625rem;z-index:8000;display:none}
 body.noscan::after{display:none}
@@ -54,12 +58,11 @@ img{-webkit-user-drag:none}.ic{position:absolute;touch-action:none}.ic.dragging{
  #tray button{flex:0 0 auto;max-width:5rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:1px 4px}#start{white-space:nowrap;padding:1px 5px;font-size:.9em}
  button,select{min-height:2rem}input,select,textarea{font-size:16px}
  #desk{grid-template-columns:repeat(auto-fill,4.75rem);padding-top:calc(0.75rem + env(safe-area-inset-top,0px))}
- #menu{max-height:60%;overflow:auto}
 }
 @media(prefers-reduced-motion:no-preference){.start{animation:p 1.6s steps(2) infinite}@keyframes p{50%{background:var(--mint)}}}
 </style></head><body>
 <div id="desk"></div><div id="ann"></div><div id="menu"></div><div id="toast"></div><div id="ctx"></div>
-<div id="tb"><button id="start" class="start">Luni's Thing</button><div id="tasks"></div><a id="credit" href="https://radiusos.ignorelist.com/" target="_blank" rel="noopener noreferrer">Radius did it first and better (Radius OS)</a><span id="ver"></span><span id="tray"></span></div>
+<div id="tb"><button id="start" class="start">Luni's Thing</button><div id="tasks"></div><button id="vrbtn" title="VR mode: fullscreen, bigger, 3D head-tracked desktop">🥽 VR</button><a id="credit" href="https://radiusos.ignorelist.com/" target="_blank" rel="noopener noreferrer">Radius did it first and better (Radius OS)</a><span id="ver"></span><span id="tray"></span></div>
 <script>
 /* ====== CONFIG: Supabase values (see has_perm.sql) ====== */
 const CFG={url:'https://cyjyuvrarekwlefxcqui.supabase.co',key:'sb_publishable_E2_jmyi7lsaceSdaVGeQAg_FvsDUTpb'};
@@ -157,17 +160,26 @@ function win(id,title,icon,fn,wd=440,ht=400){
 }
 
 /* ---- apps ---- */
-const WC={0:'Clear',1:'Mostly clear',2:'Partly cloudy',3:'Overcast',45:'Fog',48:'Fog',51:'Drizzle',61:'Rain',63:'Rain',65:'Heavy rain',71:'Snow',73:'Snow',75:'Heavy snow',80:'Showers',95:'Thunderstorm'};
+const WC={0:'☀ Clear',1:'🌤 Mostly clear',2:'⛅ Partly cloudy',3:'☁ Overcast',45:'🌫 Fog',48:'🌫 Fog',51:'🌦 Light drizzle',53:'🌦 Drizzle',55:'🌦 Heavy drizzle',56:'🌧 Freezing drizzle',57:'🌧 Freezing drizzle',61:'🌧 Light rain',63:'🌧 Rain',65:'🌧 Heavy rain',66:'🌧 Freezing rain',67:'🌧 Freezing rain',71:'🌨 Light snow',73:'🌨 Snow',75:'❄ Heavy snow',77:'❄ Snow grains',80:'🌦 Showers',81:'🌦 Showers',82:'⛈ Heavy showers',85:'🌨 Snow showers',86:'🌨 Snow showers',95:'⛈ Thunderstorm',96:'⛈ Thunderstorm, hail',99:'⛈ Thunderstorm, hail'};
+const US_ST={al:'alabama',ak:'alaska',az:'arizona',ar:'arkansas',ca:'california',co:'colorado',ct:'connecticut',de:'delaware',fl:'florida',ga:'georgia',hi:'hawaii',id:'idaho',il:'illinois',in:'indiana',ia:'iowa',ks:'kansas',ky:'kentucky',la:'louisiana',me:'maine',md:'maryland',ma:'massachusetts',mi:'michigan',mn:'minnesota',ms:'mississippi',mo:'missouri',mt:'montana',ne:'nebraska',nv:'nevada',nh:'new hampshire',nj:'new jersey',nm:'new mexico',ny:'new york',nc:'north carolina',nd:'north dakota',oh:'ohio',ok:'oklahoma',or:'oregon',pa:'pennsylvania',ri:'rhode island',sc:'south carolina',sd:'south dakota',tn:'tennessee',tx:'texas',ut:'utah',vt:'vermont',va:'virginia',wa:'washington',wv:'west virginia',wi:'wisconsin',wy:'wyoming',dc:'district of columbia'};
 function weather(b){
- const out=h('div'),inp=h('input',{placeholder:'City',value:store.get('city','')});
- const go=async()=>{const q=inp.value.trim();if(!q)return;out.textContent='Loading...';
-  try{const g=(await(await fetch('https://geocoding-api.open-meteo.com/v1/search?count=1&name='+encodeURIComponent(q))).json()).results?.[0];
-   if(!g){out.textContent='City not found.';return}store.set('city',q);
-   const d=await(await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${g.latitude}&longitude=${g.longitude}&current=temperature_2m,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,weather_code&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto`)).json();
-   out.replaceChildren(h('div',{className:'big'},Math.round(d.current.temperature_2m)+'°F'),h('div',{},`${g.name}, ${g.admin1||g.country}: ${WC[d.current.weather_code]||'Weather'}, wind ${d.current.wind_speed_10m} mph`),
-    ...d.daily.time.map((t,i)=>h('div',{className:'row'},new Date(t+'T12:00').toLocaleDateString([],{weekday:'short'})+`  ${WC[d.daily.weather_code[i]]||''}  ${Math.round(d.daily.temperature_2m_max[i])}° / ${Math.round(d.daily.temperature_2m_min[i])}°`)));
-  }catch{out.textContent='Weather failed to load.'}};
- inp.onkeydown=e=>{if(e.key==='Enter')go()};b.append(h('div',{className:'bar'},inp,h('button',{on:{click:go}},'Go')),out);go();
+ const out=h('div'),inp=h('input',{placeholder:'City (Denver or Denver, CO)',value:store.get('city','')});
+ const J=async u=>{const c=new AbortController(),t=setTimeout(()=>c.abort(),12000);try{const r=await fetch(u,{signal:c.signal});if(!r.ok)throw new Error('HTTP '+r.status);return await r.json()}finally{clearTimeout(t)}};
+ const fail=e=>{out.textContent='Weather failed to load: '+(e.name==='AbortError'?'request timed out':e.message)+'. If this keeps happening, your network or an ad blocker may be blocking open-meteo.com.'};
+ const load=async(lat,lon,name)=>{
+  const d=await J(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,weather_code&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto`);
+  if(d.error||!d.current||!d.daily)throw new Error(d.reason||'no weather data returned');
+  out.replaceChildren(h('div',{className:'big'},Math.round(d.current.temperature_2m)+'°F'),h('div',{},`${name}: ${WC[d.current.weather_code]||'Weather'}, wind ${d.current.wind_speed_10m} mph`),
+   ...d.daily.time.map((t,i)=>h('div',{className:'row'},new Date(t+'T12:00').toLocaleDateString([],{weekday:'short'})+`  ${WC[d.daily.weather_code[i]]||''}  ${Math.round(d.daily.temperature_2m_max[i])}° / ${Math.round(d.daily.temperature_2m_min[i])}°`)))};
+ const go=async()=>{const q=inp.value.trim();if(!q){out.textContent='Type a city, or press 📍 to use your location.';return}out.textContent='Loading...';
+  try{const parts=q.split(',').map(x=>x.trim()).filter(Boolean),hp=parts.slice(1).map(x=>x.toLowerCase()).map(x=>US_ST[x]||x),
+    res=(await J('https://geocoding-api.open-meteo.com/v1/search?count=10&language=en&format=json&name='+encodeURIComponent(parts[0]||q))).results||[],
+    g=(hp.length&&res.find(r=>[r.admin1,r.country,r.country_code].some(x=>x&&hp.includes(String(x).toLowerCase()))))||res[0];
+   if(!g){out.textContent='City not found. Try just the city name.';return}
+   store.set('city',q);await load(g.latitude,g.longitude,`${g.name}, ${g.admin1||g.country}`)}catch(e){fail(e)}};
+ const here=()=>{if(!navigator.geolocation){out.textContent='This browser has no location support.';return}out.textContent='Finding you...';
+  navigator.geolocation.getCurrentPosition(async p=>{try{await load(p.coords.latitude,p.coords.longitude,'Your location')}catch(e){fail(e)}},()=>{out.textContent='Location was blocked. Type a city instead.'},{timeout:10000})};
+ inp.onkeydown=e=>{if(e.key==='Enter')go()};b.append(h('div',{className:'bar'},inp,h('button',{on:{click:go}},'Go'),h('button',{title:'Use my location',on:{click:here}},'📍')),out);go();
 }
 const FEEDS=[['BBC World','https://feeds.bbci.co.uk/news/world/rss.xml'],['Hacker News','https://hnrss.org/frontpage'],['NASA','https://www.nasa.gov/feed/'],['Ars Technica','https://feeds.arstechnica.com/arstechnica/index']];
 function rss(b){
@@ -1384,6 +1396,26 @@ async function loadMe(){
   desk();
   tray();
 }
+
+/* ---- VR mode: fullscreen, larger UI, 3D depth and head tracking (phone gyro or mouse). Esc exits. ---- */
+const VRS={on:false,raf:0,tx:0,ty:0,cx:0,cy:0,base:null,gyro:false};
+function vrOri(e){if(e.gamma==null||e.beta==null)return;VRS.gyro=true;const a=screen.orientation?.angle||0;let g=e.gamma,bt=e.beta;if(Math.abs(a)===90){[g,bt]=[bt,g]}
+ if(!VRS.base)VRS.base={g,b:bt};VRS.tx=Math.max(-14,Math.min(14,(g-VRS.base.g)*.5));VRS.ty=Math.max(-10,Math.min(10,-(bt-VRS.base.b)*.4))}
+function vrMouse(e){if(VRS.gyro)return;VRS.tx=(e.clientX/innerWidth-.5)*12;VRS.ty=-(e.clientY/innerHeight-.5)*8}
+function vrFrame(){if(!VRS.on)return;VRS.cx+=(VRS.tx-VRS.cx)*.12;VRS.cy+=(VRS.ty-VRS.cy)*.12;
+ document.body.style.setProperty('--vry',VRS.cx.toFixed(2)+'deg');document.body.style.setProperty('--vrx',VRS.cy.toFixed(2)+'deg');VRS.raf=requestAnimationFrame(vrFrame)}
+async function vrOn(){if(VRS.on)return;VRS.on=true;VRS.base=null;VRS.gyro=false;VRS.tx=VRS.ty=VRS.cx=VRS.cy=0;
+ document.documentElement.classList.add('vr');document.body.classList.add('vr');document.documentElement.style.setProperty('--ui',1.25);
+ try{await document.documentElement.requestFullscreen?.()}catch{}
+ try{if(window.DeviceOrientationEvent?.requestPermission){const r=await DeviceOrientationEvent.requestPermission();if(r!=='granted')throw 0}addEventListener('deviceorientation',vrOri)}catch{}
+ addEventListener('pointermove',vrMouse);VRS.raf=requestAnimationFrame(vrFrame);vrBtn();fit();toast('VR mode on. Move your mouse or tilt your phone to look around. Esc to exit.')}
+function vrOff(){if(!VRS.on)return;VRS.on=false;cancelAnimationFrame(VRS.raf);removeEventListener('deviceorientation',vrOri);removeEventListener('pointermove',vrMouse);
+ document.documentElement.classList.remove('vr');document.body.classList.remove('vr');document.body.style.removeProperty('--vry');document.body.style.removeProperty('--vrx');
+ applySettings();if(document.fullscreenElement)document.exitFullscreen?.().catch(()=>{});vrBtn();fit()}
+function vrBtn(){const b=$('#vrbtn');if(b)b.textContent=VRS.on?'🥽 Exit VR':'🥽 VR'}
+$('#vrbtn').onclick=()=>VRS.on?vrOff():vrOn();
+addEventListener('keydown',e=>{if(e.key==='Escape'&&VRS.on&&!FXOV.size)vrOff()});
+document.addEventListener('fullscreenchange',()=>{if(VRS.on&&!document.fullscreenElement)vrOff()});
 $('#start').onclick=()=>$('#menu').classList.toggle('on');
 $('#desk').onclick=()=>$('#menu').classList.remove('on');
 /* supabase re-fires SIGNED_IN (and refreshes tokens) whenever the tab regains focus.
