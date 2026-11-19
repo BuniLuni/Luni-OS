@@ -1,0 +1,17 @@
+{
+  "name": "nessy-web",
+  "collaborators": [
+    "nathsou"
+  ],
+  "version": "0.1.0",
+  "files": [
+    "nessy_web_bg.wasm",
+    "nessy_web.js",
+    "nessy_web.d.ts"
+  ],
+  "module": "nessy_web.js",
+  "types": "nessy_web.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
