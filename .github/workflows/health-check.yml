@@ -1,0 +1,23 @@
+name: Site health check
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"    # GitHub's minimum interval is 5 minutes
+  workflow_dispatch:          # lets you run it manually from the Actions tab
+
+concurrency:
+  group: health-check
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check site and rename voice channels
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          STATUS_VC_ID: ${{ secrets.STATUS_VC_ID }}
+          PING_VC_ID: ${{ secrets.PING_VC_ID }}
+        run: python3 .github/scripts/health_check.py
