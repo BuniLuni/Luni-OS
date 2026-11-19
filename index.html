@@ -116,7 +116,7 @@ const badge=r=>h('span',{style:`background:${rc(r)};color:${ink(rc(r))};font-siz
 function openProfile(p){win('p'+p.id,dn(p),'🪪',b=>{const a=av(p);
  b.append(h('div',{style:'text-align:center'},a?h('img',{src:a,width:96,height:96,style:'border:2px solid var(--ink);object-fit:cover'}):h('div',{className:'big'},'🪪'),h('h2',{style:'margin:0.375rem 0 0'},dn(p)),
   h('div',{},h('a',{href:'https://github.com/'+encodeURIComponent(p.login),target:'_blank',rel:'noopener noreferrer'},'@'+p.login),badge(p.role),...(p.id===me?.id?myRoleNames:[]).filter(n=>n!==p.role).map(badge))),
-  h('p',{style:'white-space:pre-wrap'},p.bio||'No description yet.'),h('div',{style:'opacity:.7'},p.created_at?'Joined '+new Date(p.created_at).toLocaleDateString():''),me&&p.id!==me.id?h('span',{},h('button',{on:{click:()=>openDM(p)}},'💌 Message'),' ',h('button',{on:{click:()=>openReport(p.login)}},'🚩 Report')):'')},340,380)}
+  h('p',{style:'white-space:pre-wrap'},p.bio||'No description yet.'),h('div',{style:'opacity:.7'},p.created_at?'Joined '+new Date(p.created_at).toLocaleDateString():''),me&&p.id!==me.id?h('span',{},h('button',{on:{click:()=>openDM(p)}},'💌 Message'),' ',h('button',{on:{click:()=>openRp(p)}},'Roleplay'),' ',h('button',{on:{click:()=>openReport(p.login)}},'🚩 Report')):'')},340,380)}
 async function profileApp(b){
  if(!sb)return noBack(b);if(!me)return needLogin(b);
  const nm=h('input',{placeholder:'Display name (blank = '+me.login+')',maxLength:32,value:me.display_name||''}),bio=h('textarea',{rows:4,maxLength:200,placeholder:'Tell people about yourself (200 characters)'}),
@@ -480,9 +480,80 @@ async function startNotify(){
    if(!u)u=(await sb.from('profiles').select(PCOLS).eq('id',m.sender_id).maybeSingle()).data;
    snd('dm');toast('💌 '+(u?dn(u):'Someone')+': '+m.body.slice(0,60));ping('Message from '+(u?dn(u):'someone'),m.body);wins.dm?.draw?.();tray()})
   .on('postgres_changes',{event:'INSERT',schema:'public',table:'notifications',filter:'recipient=eq.'+me.id},p=>{const n=p.new;noteUnread++;snd('note');toast('🔔 '+n.title);ping(n.title,n.body||'');wins.dm?.draw?.();tray()})
+  .on('postgres_changes',{event:'INSERT',schema:'public',table:'rp_events',filter:'recipient=eq.'+me.id},p=>rpIncoming(p.new))
   .on('postgres_changes',{event:'*',schema:'public',table:'levels',filter:'user_id=eq.'+me.id},p=>setLv(p.new))
   .on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},p=>{if(p.new.user_id===me.id)return;const w=wins.chat;if(!w||w.el.classList.contains('hide')||!document.hasFocus())snd('chat')})
   .subscribe()}
+/* ---- Roleplay: actions go through the rp_send() database function; incoming ones use the same popup style as the Powers notify effect ---- */
+let RPA=null;
+const rpActs=async force=>{if(!RPA||force)RPA=(await sb.from('rp_actions').select('*').order('builtin',{ascending:false}).order('key')).data||[];return RPA};
+const rpSend=async(to,act,body)=>{const{error}=await sb.rpc('rp_send',{target:to,p_action:act||null,p_body:body||null});if(error){toast(error.message);return false}return true};
+const openRp=u=>{if(!me||u.id===me.id)return;openApp('rp');wins.rp?.pick?.(u)};
+async function rpPopup(ev){
+ let host=$('#rpn');
+ if(!host){host=h('div',{id:'rpn',style:'position:fixed;top:60px;right:16px;z-index:99999;display:flex;flex-direction:column;gap:8px;align-items:flex-end;pointer-events:none;max-width:calc(100vw - 32px)'});document.body.append(host)}
+ const acts=await rpActs().catch(()=>[]),
+  e=h('div',{style:'pointer-events:auto;background:var(--win);border:3px solid var(--pink);padding:10px 14px;font-size:22px;max-width:320px;box-shadow:5px 5px 0 rgba(0,0,0,.4)'}),
+  body=h('div',{},ev.message),row=h('div',{className:'bar',style:'margin:0.375rem 0 0'}),slot=h('div');
+ let t;
+ const close=()=>{clearTimeout(t);if(!e.isConnected)return;e.animate([{opacity:1},{opacity:0}],{duration:200,fill:'both'}).onfinish=()=>e.remove()},
+  arm=()=>{clearTimeout(t);t=setTimeout(close,15000)};
+ const canBack=ev.action_key&&acts.some(a=>a.key===ev.action_key&&a.enabled);
+ if(canBack)row.append(h('button',{on:{click:async b=>{if(await rpSend(ev.sender,ev.action_key)){toast('Sent back');close()}}}},'Do it back'));
+ row.append(h('button',{on:{click:()=>{
+   const inp=h('input',{placeholder:'Write a reply',maxLength:300,style:'width:100%'});
+   const go=async()=>{const v=inp.value.trim();if(!v)return;if(await rpSend(ev.sender,null,v)){toast('Reply sent');close()}};
+   inp.onkeydown=k=>{if(k.key==='Enter')go()};
+   slot.replaceChildren(inp,h('div',{className:'bar',style:'margin:0.25rem 0 0'},h('button',{on:{click:go}},'Send'),h('button',{on:{click:()=>{slot.replaceChildren();arm()}}},'Cancel')));
+   clearTimeout(t);inp.focus()}}},'Reply'),h('button',{on:{click:close}},'Dismiss'));
+ e.append(h('b',{},'Notification'),body,row,slot);
+ e.onmouseenter=()=>clearTimeout(t);e.onmouseleave=()=>{if(!e.contains(document.activeElement))arm()};e.addEventListener('focusin',()=>clearTimeout(t));
+ host.append(e);e.animate([{transform:'translateX(120%)'},{transform:'none'}],{duration:250,easing:'ease-out'});arm()}
+function rpIncoming(ev){snd('note');ping('Roleplay',ev.message);rpPopup(ev);wins.rp?.draw?.()}
+function rpApp(b,w){
+ if(!sb)return noBack(b);if(!me)return needLogin(b);
+ let tab='send',target=null,users=[],tok=0;const P={};
+ const bar=h('div',{className:'bar'}),pane=h('div');b.append(bar,pane);
+ w.pick=u=>{P[u.id]=u;target=u.id;tab='send';w.draw?.()};
+ const TABS=[['send','Send'],['inbox','Inbox'],['blocks','Blocks']];
+ const prof=async ids=>{const need=ids.filter(i=>i&&!P[i]);if(need.length)((await sb.from('profiles').select('id,login,display_name').in('id',need)).data||[]).forEach(u=>P[u.id]=u)};
+ const nm=id=>P[id]?dn(P[id]):'someone';
+ const loadUsers=async()=>{if(!users.length){users=((await sb.from('profiles').select('id,login,display_name').order('login').limit(1000)).data||[]).filter(u=>u.id!==me.id);users.forEach(u=>P[u.id]=u)}
+  if(target&&P[target]&&!users.some(u=>u.id===target))users.unshift(P[target])};
+ const picker=sel0=>{const f=h('input',{placeholder:'Filter users'}),s=h('select',{size:6,style:'width:100%'}),
+   fill=()=>{const q=f.value.trim().toLowerCase();s.replaceChildren(...users.filter(u=>!q||(u.login+' '+(u.display_name||'')).toLowerCase().includes(q)).slice(0,200).map(u=>h('option',{value:u.id,selected:u.id===sel0},dn(u)+' @'+u.login)))};
+  f.oninput=fill;s.onchange=()=>{target=s.value};fill();return{f,s,get:()=>s.value}};
+ const sendTab=async()=>{await loadUsers();const acts=(await rpActs()).filter(a=>a.enabled),pk=picker(target);
+  return h('div',{},h('div',{className:'bar'},pk.f),pk.s,h('div',{style:'margin:0.375rem 0 0.25rem'},'Pick a user, then an action:'),
+   h('div',{className:'bar'},...(acts.length?acts.map(a=>h('button',{on:{click:async()=>{const to=pk.get();if(!to)return toast('Pick someone first');if(await rpSend(to,a.key))toast(a.label+' sent to '+nm(to))}}},a.label)):['No actions are available right now.'])))};
+ const inboxTab=async()=>{const d=(await sb.from('rp_events').select('*').eq('recipient',me.id).order('created_at',{ascending:false}).limit(50)).data||[];
+  await prof([...new Set(d.map(x=>x.sender))]);const acts=await rpActs();
+  if(d.some(x=>!x.read_at))sb.from('rp_events').update({read_at:new Date().toISOString()}).eq('recipient',me.id).is('read_at',null).then(()=>{});
+  const list=h('div'),clear=h('button',{on:{click:async()=>{const{error}=await sb.from('rp_events').delete().eq('recipient',me.id);if(error)return toast(error.message);list.replaceChildren('Nothing here yet.')}}},'Clear all');
+  const item=ev=>{const slot=h('div'),r=h('div',{className:'row'}),back=ev.action_key&&acts.some(a=>a.key===ev.action_key&&a.enabled);
+   const reply=()=>{const inp=h('input',{placeholder:'Write a reply',maxLength:300,style:'width:100%'}),go=async()=>{const v=inp.value.trim();if(!v)return;if(await rpSend(ev.sender,null,v)){toast('Reply sent');slot.replaceChildren()}};
+    inp.onkeydown=k=>{if(k.key==='Enter')go()};slot.replaceChildren(inp,h('div',{className:'bar',style:'margin:0.25rem 0 0'},h('button',{on:{click:go}},'Send'),h('button',{on:{click:()=>slot.replaceChildren()}},'Cancel')));inp.focus()};
+   r.append(h('div',{},ev.message),h('small',{style:'opacity:.7'},new Date(ev.created_at).toLocaleString()),
+    h('div',{className:'bar',style:'margin:0.25rem 0 0'},back?h('button',{on:{click:async()=>{if(await rpSend(ev.sender,ev.action_key))toast('Sent back')}}},'Do it back'):'',h('button',{on:{click:reply}},'Reply'),
+     h('button',{on:{click:async()=>{const{error}=await sb.from('rp_blocks').insert({user_id:me.id,blocked_user:ev.sender});toast(error?(error.code==='23505'?'Already blocked':error.message):'Blocked '+nm(ev.sender))}}},'Block sender'),
+     h('button',{on:{click:async()=>{const{error}=await sb.from('rp_events').delete().eq('id',ev.id);if(error)return toast(error.message);r.remove()}}},'Delete')),slot);return r};
+  list.append(...(d.length?d.map(item):['Nothing here yet.']));return h('div',{},h('div',{className:'bar'},h('b',{},'Received'),clear),list)};
+ const blocksTab=async()=>{await loadUsers();const acts=await rpActs(),lab=k=>acts.find(a=>a.key===k)?.label||k;
+  const d=(await sb.from('rp_blocks').select('*').eq('user_id',me.id).order('created_at',{ascending:false})).data||[];await prof(d.map(x=>x.blocked_user));
+  const desc=x=>x.blocked_user&&x.action_key?`${lab(x.action_key)} from ${nm(x.blocked_user)}`:x.blocked_user?`Everything from ${nm(x.blocked_user)}`:`${lab(x.action_key)} from everyone`;
+  const add=async f=>{const{error}=await sb.from('rp_blocks').insert({user_id:me.id,...f});if(error)return toast(error.code==='23505'?'Already blocked':error.message);toast('Block added');draw()};
+  const pk=picker(),ua=h('select',{},h('option',{value:''},'All actions'),...acts.map(a=>h('option',{value:a.key},a.label))),
+   ao=h('select',{},...acts.map(a=>h('option',{value:a.key},a.label)));
+  return h('div',{},h('small',{},'Blocked actions are dropped silently. The sender is not told.'),
+   h('div',{className:'row'},h('b',{},'Block a user'),h('div',{className:'bar'},pk.f),pk.s,h('div',{className:'bar',style:'margin-top:0.25rem'},ua,h('button',{on:{click:()=>{if(!pk.get())return toast('Pick a user first');add({blocked_user:pk.get(),action_key:ua.value||null})}}},'Block'))),
+   h('div',{className:'row'},h('b',{},'Block an action from everyone'),h('div',{className:'bar',style:'margin-top:0.25rem'},ao,h('button',{on:{click:()=>ao.value?add({action_key:ao.value}):toast('No action to block')}},'Block'))),
+   h('div',{className:'row'},h('b',{},'Your blocks')),
+   ...(d.length?d.map(x=>h('div',{className:'row'},desc(x)+' ',h('button',{on:{click:async()=>{const{error}=await sb.from('rp_blocks').delete().eq('id',x.id);if(error)return toast(error.message);draw()}}},'Remove'))):[h('div',{className:'row'},'No blocks set.')]))};
+ const draw=async()=>{const my=++tok,{count}=await sb.from('rp_events').select('id',{count:'exact',head:true}).eq('recipient',me.id).is('read_at',null);if(my!==tok)return;
+  bar.replaceChildren(...TABS.map(([k,t])=>h('button',{disabled:tab===k,on:{click:()=>{tab=k;draw()}}},k==='inbox'&&count&&tab!=='inbox'?`Inbox (${count})`:t)));
+  pane.textContent='Loading...';let n;try{n=await({send:sendTab,inbox:inboxTab,blocks:blocksTab}[tab])()}catch(e){n='Could not load: '+(e.message||e)}
+  if(my===tok)pane.replaceChildren(n)};
+ w.draw=draw;w.onclose=()=>{tok++};draw()}
 /* ---- Messages app: DMs + notifications ---- */
 function openDM(u){if(u.id===me?.id)return;openApp('dm');wins.dm?.open?.(u)}
 async function dmApp(b,w){
@@ -988,6 +1059,17 @@ async function admin(b){
   pane.replaceChildren(t,h('button',{on:{click:async()=>{if(!t.value.trim())return;const{error}=await sb.from('announcements').insert({body:t.value.trim(),author_login:me.login});if(error)return toast(error.message);log('announcement posted');T.Announce();loadAnn()}}},'Post to everyone'),l)},
  Settings:async()=>{const s={};((await sb.from('settings').select('*')).data||[]).forEach(r=>s[r.key]=r.value==='true');
   pane.replaceChildren(...[['chat_locked','Lock chat (people with the bypass permission can still talk)'],['publish_locked','Lock app publishing'],['screenshare_audio_locked','Disable audio in screen sharing']].map(([k,n])=>{const c=h('input',{type:'checkbox',checked:!!s[k]});c.onchange=async()=>{const{error}=await sb.from('settings').upsert({key:k,value:String(c.checked)});toast(error?error.message:'Saved');log(`${k} = ${c.checked}`)};return h('div',{className:'row'},c,' '+n)}))},
+ Roleplay:async()=>{const d=(await sb.from('rp_actions').select('*').order('builtin',{ascending:false}).order('key')).data||[];RPA=null;
+  const row=a=>{const lb=h('input',{value:a.label,maxLength:24,style:'width:8rem'}),tp=h('input',{value:a.template,maxLength:200}),en=h('input',{type:'checkbox',checked:a.enabled});
+   const save=async()=>{const l=lb.value.trim(),t=tp.value.trim();if(l.length<2)return toast('Label needs 2 to 24 characters');if(t.length<3||!t.includes('{sender}'))return toast('Message must include {sender}');
+    const{error}=await sb.from('rp_actions').update({label:l,template:t,enabled:en.checked}).eq('key',a.key);if(error)return toast(error.message);log('roleplay command edited: '+a.key);RPA=null;toast('Saved')};
+   const del=a.builtin?'':h('button',{on:{click:async()=>{if(!confirm('Delete command '+a.key+'?'))return;const{error}=await sb.from('rp_actions').delete().eq('key',a.key);if(error)return toast(error.message);log('roleplay command deleted: '+a.key);RPA=null;T.Roleplay()}}},'Delete');
+   return h('div',{className:'row'},h('b',{},a.key+(a.builtin?' (built in)':'')),h('div',{className:'bar'},lb,h('label',{},en,' Enabled')),h('div',{className:'bar'},tp),h('div',{className:'bar'},h('button',{on:{click:save}},'Save'),del))};
+  const k=h('input',{placeholder:'key (a-z, 0-9, _)',maxLength:20}),l=h('input',{placeholder:'Button label',maxLength:24}),t=h('input',{placeholder:'{sender} poked you',maxLength:200});
+  const add=async()=>{const key=k.value.trim().toLowerCase(),lab=l.value.trim(),tpl=t.value.trim();if(!/^[a-z0-9_]{2,20}$/.test(key))return toast('Key: a-z, 0-9 or _ (2-20)');if(lab.length<2)return toast('Label needs 2 to 24 characters');if(tpl.length<3||!tpl.includes('{sender}'))return toast('Message must include {sender}');
+   const{error}=await sb.from('rp_actions').insert({key,label:lab,template:tpl,created_by:me.login});if(error)return toast(error.code==='23505'?'That key already exists':error.message);log('roleplay command added: '+key);RPA=null;T.Roleplay()};
+  pane.replaceChildren(h('b',{},'Roleplay commands'),h('div',{},h('small',{},'In a message, {sender} is the sender name and {target} is the recipient name.')),...d.map(row),
+   h('div',{className:'row'},h('b',{},'Add a command'),h('div',{className:'bar'},k,l),h('div',{className:'bar'},t),h('div',{className:'bar'},h('button',{on:{click:add}},'Add command'))))},
  Notify:async()=>{const us=(await sb.from('profiles').select('id,login,display_name').order('login')).data||[],
   all=h('input',{type:'checkbox',checked:true}),sel=h('select',{multiple:true,size:8,style:'width:100%',disabled:true},...us.map(u=>h('option',{value:u.id},dn(u)+' @'+u.login))),
   ti=h('input',{maxLength:100,placeholder:'Title'}),bo=h('textarea',{rows:3,maxLength:500,placeholder:'Message (optional)'});
@@ -1011,7 +1093,7 @@ async function admin(b){
  Stats:async()=>{const day=new Date(Date.now()-864e5).toISOString();const v=await Promise.all([cnt('profiles'),cnt('profiles',q=>q.eq('role','banned')),cnt('messages'),cnt('messages',q=>q.gte('created_at',day)),cnt('apps')]);
   pane.replaceChildren(...['Users','Banned','Messages','Messages (24h)','Apps'].map((n,i)=>h('div',{className:'row'},`${n}: ${v[i]}`)))}
  };
- const NEED={Users:'ban',Chat:'delete_messages',Apps:'delete_apps',Announce:'announce',Settings:'site_settings',Log:'view_audit',Roles:'manage_roles',Emojis:'manage_emojis',Channels:'manage_channels',Stats:'admin_panel',Notify:'notify',Reports:'admin_panel'};
+ const NEED={Users:'ban',Chat:'delete_messages',Apps:'delete_apps',Announce:'announce',Settings:'site_settings',Log:'view_audit',Roles:'manage_roles',Emojis:'manage_emojis',Channels:'manage_channels',Stats:'admin_panel',Notify:'notify',Roleplay:'admin_panel',Reports:'admin_panel'};
  const keys=Object.keys(T).filter(k=>can(NEED[k])||(k==='Users'&&can('manage_roles')));
  keys.forEach(k=>bar.append(h('button',{on:{click:()=>{pane.textContent='Loading...';T[k]()}}},k)));
  b.append(bar,pane);T[keys[0]]();
@@ -1374,7 +1456,7 @@ function nesApp(b){
  f.addEventListener('load',()=>{try{f.contentWindow.focus()}catch{}});
  b.append(f);
 }
-const APPS=[['weather','Weather','☁',weather],['rss','News','📰',rss],['radio','Radio','📻',radio,360,420],['chat','Global Chat','💬',chat,400,440],['voice','Voice','🎙',voice,480,540],['profile','My Profile','🪪',profileApp,360,470],['online',"Who's Online",'🟢',online,320,380],['shop','JS Shop','🛒',shop,500,560],['builder','App Builder','🧱',builder,500,540],['calc','Calculator','🧮',calc,270,340],['paint','Paint','🎨',paint,430,420],['snake','Snake','🐍',snake,350,400],['nes','NES Emulator','🎮',nesApp,560,560],['term','JS Linux','🐧',jslinuxApp,720,520],['notes','Notepad','📝',notes,340,300],['levels','Levels','⭐',levelsApp,360,440],['clicker','Cookie Clicker','🍪',clicker,360,480],['dm','Messages','💌',dmApp,520,420],['powers','Powers','⚡',powers,480,620],['groups','Group Chats','👥',groupsApp,540,440],['report','Report','🚩',reportApp,440,480],['status','Status','🟢',statusApp,340,540],['settings','Settings','⚙',settings,340,220],['admin','Admin','🛡',admin,540,480],['about','About','💾',about,400,440],['bin','Recycle Bin','🗑',binApp,380,340]];
+const APPS=[['weather','Weather','☁',weather],['rss','News','📰',rss],['radio','Radio','📻',radio,360,420],['chat','Global Chat','💬',chat,400,440],['voice','Voice','🎙',voice,480,540],['profile','My Profile','🪪',profileApp,360,470],['online',"Who's Online",'🟢',online,320,380],['shop','JS Shop','🛒',shop,500,560],['builder','App Builder','🧱',builder,500,540],['calc','Calculator','🧮',calc,270,340],['paint','Paint','🎨',paint,430,420],['snake','Snake','🐍',snake,350,400],['nes','NES Emulator','🎮',nesApp,560,560],['term','JS Linux','🐧',jslinuxApp,720,520],['notes','Notepad','📝',notes,340,300],['levels','Levels','⭐',levelsApp,360,440],['clicker','Cookie Clicker','🍪',clicker,360,480],['dm','Messages','💌',dmApp,520,420],['powers','Powers','⚡',powers,480,620],['groups','Group Chats','👥',groupsApp,540,440],['report','Report','🚩',reportApp,440,480],['status','Status','🟢',statusApp,340,540],['rp','Roleplay','RP',rpApp,500,520],['settings','Settings','⚙',settings,340,220],['admin','Admin','🛡',admin,540,480],['about','About','💾',about,400,440],['bin','Recycle Bin','🗑',binApp,380,340]];
 function lp(el,fn){let t,sx,sy;const c=()=>clearTimeout(t);
  el.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse')return;sx=e.clientX;sy=e.clientY;el._lp=0;const tg=e.target;t=setTimeout(()=>{el._lp=1;fn({clientX:sx,clientY:sy,target:tg,preventDefault(){},stopPropagation(){}})},500)});
  el.addEventListener('pointermove',e=>{if(Math.abs(e.clientX-sx)>10||Math.abs(e.clientY-sy)>10)c()});el.addEventListener('pointerup',c);el.addEventListener('pointercancel',c);
