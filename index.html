@@ -933,7 +933,28 @@ async function voice(b,w){
 /* ---- user apps + JS Shop ---- */
 const TPL='<!doctype html>\n<body style="font-family:sans-serif;text-align:center">\n<h1>Hello!</h1>\n<button onclick="this.textContent=\'clicked\'">Click me</button>\n</body>';
 function install(a){const l=store.get('apps',[]);if(!l.find(x=>x.id===String(a.id)))l.push({id:String(a.id),name:a.name,icon:a.icon||'📦',code:a.code});store.set('apps',l);desk();toast('Installed: '+a.name)}
-const runApp=a=>win('u'+a.id,a.name,a.icon,b=>{b.style.padding='0';const jc=jslParse(a.code);if(jc)return b.append(jslFrame(jc));b.append(h('iframe',{sandbox:'allow-scripts',srcdoc:a.code,style:'width:100%;height:100%;border:0;background:#fff'}))});
+/* ---- app saves: apps run in sandboxed iframes where localStorage is blocked, so give them a localStorage that is kept in the user's account ---- */
+const appLK=id=>'appsave:'+(me?me.id:'guest')+':'+id;
+let appSaveWarn=0;
+async function saveApp(id,d){store.set(appLK(id),d);if(!sb||!me)return;
+ const{error}=await sb.from('app_saves').upsert({user_id:me.id,app_id:id,data:d,updated_at:new Date().toISOString()});
+ if(error&&!appSaveWarn){appSaveWarn=1;toast('Cloud save failed, kept in this browser: '+error.message)}}
+async function loadAppSave(id){let d=null;
+ if(sb&&me){try{const r=await Promise.race([sb.from('app_saves').select('data').eq('app_id',id).maybeSingle(),new Promise(r=>setTimeout(()=>r(null),4000))]);d=r?.data?.data??null}catch{}}
+ if(d==null)d=store.get(appLK(id),null);
+ if(d==null&&me)d=store.get('appsave:guest:'+id,null);
+ try{const o=JSON.parse(d);return o&&typeof o==='object'&&!Array.isArray(o)?Object.fromEntries(Object.entries(o).filter(([,v])=>typeof v==='string')):{}}catch{return{}}}
+const SHIM=`(()=>{const d=Object.assign(Object.create(null),__SEED__);let t=0;
+const post=()=>{clearTimeout(t);t=0;try{parent.postMessage({luni:'save',data:JSON.stringify(d)},'*')}catch(e){}},q=()=>{clearTimeout(t);t=setTimeout(post,300)};
+const ls={getItem:k=>(k=String(k))in d?d[k]:null,setItem:(k,v)=>{d[String(k)]=String(v);q()},removeItem:k=>{delete d[String(k)];q()},clear:()=>{for(const k in d)delete d[k];q()},key:i=>Object.keys(d)[i]??null,get length(){return Object.keys(d).length}};
+const px=new Proxy(ls,{get:(o,k)=>k in o?o[k]:(typeof k==='string'&&k in d?d[k]:undefined),set:(o,k,v)=>{ls.setItem(k,v);return true},deleteProperty:(o,k)=>{ls.removeItem(k);return true}});
+try{Object.defineProperty(window,'localStorage',{configurable:true,get:()=>px})}catch(e){}
+addEventListener('pagehide',()=>{if(t)post()});document.addEventListener('visibilitychange',()=>{if(document.hidden&&t)post()})})();`;
+const withShim=(code,seed)=>{const tag='<script>'+SHIM.replace('__SEED__',()=>JSON.stringify(seed).replace(/</g,'\\u003c'))+'<\/script>';
+ for(const re of[/<head[^>]*>/i,/<html[^>]*>/i])if(re.test(code))return code.replace(re,m=>m+tag);return tag+code};
+addEventListener('message',e=>{const m=e.data;if(!m||m.luni!=='save'||typeof m.data!=='string'||m.data.length>1e6)return;
+ const f=[...document.querySelectorAll('iframe[data-appid]')].find(x=>x.contentWindow===e.source);if(f)saveApp(f.dataset.appid,m.data)});
+const runApp=a=>win('u'+a.id,a.name,a.icon,async b=>{b.style.padding='0';const jc=jslParse(a.code);if(jc)return b.append(jslFrame(jc));const id=String(a.id),seed=await loadAppSave(id);b.append(h('iframe',{sandbox:'allow-scripts','data-appid':id,srcdoc:withShim(a.code,seed),style:'width:100%;height:100%;border:0;background:#fff'}))});
 const isJsl=c=>typeof c==='string'&&c.startsWith(JSL_MAGIC);
 async function publishApp(a){
  if(!sb)return toast('Backend not set up');if(!me)return toast('Log in first');
