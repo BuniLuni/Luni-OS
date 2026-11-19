@@ -1843,4 +1843,276 @@ function frame(){
  pump(now);rd.render(scene,cam)}
 })();
 </script>
+<script type="text/plain" id="mining-src"><!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#008080">
+<title>Luni Mining 95 Ultimate</title>
+<style>
+:root{--g:#c0c0c0;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;font:12px/1.35 Tahoma,"MS Sans Serif",Verdana,sans-serif;color:#000;background:#008080;color-scheme:light;user-select:none;-webkit-user-select:none}
+body{background-color:var(--wp,#008080)}
+button,input,select,textarea{font:inherit;color:#000}
+button{background:var(--g);border:2px solid;border-color:#fff #404040 #404040 #fff;box-shadow:inset -1px -1px #808080,inset 1px 1px #dfdfdf;padding:5px 10px;min-height:28px;cursor:pointer}
+button:active:not(:disabled){border-color:#404040 #fff #fff #404040;box-shadow:inset 1px 1px #808080;padding:6px 9px 4px 11px}
+button:disabled{color:#808080;text-shadow:1px 1px #fff;cursor:default}
+input,select,textarea{background:#fff;border:2px solid;border-color:#808080 #fff #fff #808080;box-shadow:inset 1px 1px #404040;padding:4px;min-width:0;user-select:text;-webkit-user-select:text}
+.hidden{display:none!important}
+#menu{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:10px;overflow:auto}
+.logo{color:#fff;text-shadow:2px 2px #004040;text-align:center;font-weight:bold}
+.logo h1{margin:0;font-size:clamp(26px,7vw,42px);font-style:italic;letter-spacing:1px}
+.win{position:absolute;background:var(--g);border:2px solid;border-color:#dfdfdf #404040 #404040 #dfdfdf;box-shadow:inset -1px -1px #808080,inset 1px 1px #fff,3px 3px 0 #0006;padding:2px;max-width:calc(100vw - 4px)}
+.win.static{position:relative;width:min(100%,400px)}
+.tb{background:linear-gradient(90deg,var(--t1,#000080),var(--t2,#1084d0));color:#fff;font-weight:bold;padding:3px 3px 3px 5px;display:flex;justify-content:space-between;align-items:center;gap:6px;touch-action:none;cursor:default}
+.win.off .tb{background:linear-gradient(90deg,#808080,#b5b5b5)}
+.tb button{min-height:18px;width:20px;padding:0;line-height:14px;font-weight:bold;box-shadow:none}
+.body{padding:8px;max-height:calc(100svh - 90px);overflow:auto}
+.panel{border:2px solid;border-color:#808080 #fff #fff #808080;padding:6px;margin:6px 0;background:#d4d0c8}
+.lcd{background:#000;color:#3f3;font:bold 16px "Courier New",monospace;padding:6px;border:2px solid;border-color:#808080 #fff #fff #808080;text-align:center;text-shadow:0 0 4px #3f3}
+.row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:4px 0}.row>.f{flex:1}
+.item{display:flex;gap:8px;align-items:center;border-bottom:1px solid #808080;padding:5px 0}.item>div{flex:1;min-width:0}.item small{display:block;color:#404040}
+.big{width:100%;min-height:54px;font-size:16px;font-weight:bold;margin:6px 0}
+.bar{height:14px;border:2px solid;border-color:#808080 #fff #fff #808080;background:#fff}.bar i{display:block;height:100%;width:0;background:repeating-linear-gradient(90deg,#000080 0 8px,#fff 8px 10px)}
+fieldset{border:2px groove #fff;margin:6px 0;padding:6px}
+#desk{position:fixed;left:6px;top:calc(6px + env(safe-area-inset-top,0px));display:grid;gap:4px;grid-auto-flow:column;grid-template-rows:repeat(5,auto)}
+.ic{background:none!important;border:1px dotted transparent!important;box-shadow:none!important;color:#fff;text-shadow:1px 1px #000;width:76px;display:flex;flex-direction:column;align-items:center;gap:2px;padding:3px;min-height:0}
+.ic:focus,.ic:active{background:#00008080!important;border-color:#fff!important}.ic b{font-size:26px;font-weight:normal;text-shadow:none}
+#tray{position:fixed;left:0;right:0;bottom:0;height:calc(40px + env(safe-area-inset-bottom,0px));padding:3px 3px env(safe-area-inset-bottom,0px);background:var(--g);border-top:2px solid #fff;display:flex;gap:4px;align-items:center;z-index:9999}
+#tasks{flex:1;display:flex;gap:3px;overflow-x:auto;min-width:0}
+#tasks button{min-width:90px;max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
+#tasks button.on{border-color:#404040 #fff #fff #404040;background:repeating-conic-gradient(#fff 0 25%,#c0c0c0 0 50%) 0 0/2px 2px;font-weight:bold}
+#clock{border:2px solid;border-color:#808080 #fff #fff #808080;padding:5px 8px;white-space:nowrap;font-size:11px}
+#sm{position:fixed;left:2px;bottom:calc(40px + env(safe-area-inset-bottom,0px));width:210px;z-index:9998;display:flex;background:var(--g);border:2px solid;border-color:#fff #404040 #404040 #fff;box-shadow:2px 2px #000}
+#sm .side{background:linear-gradient(0deg,#000080,#1084d0);color:#fff;font-weight:bold;font-size:18px;writing-mode:vertical-rl;transform:rotate(180deg);padding:6px 3px;letter-spacing:1px}
+#sm div.l{flex:1;padding:2px}#sm button{display:block;width:100%;text-align:left;border:0;box-shadow:none;background:none;min-height:30px}#sm button:hover{background:#000080;color:#fff}
+#sm hr{border:0;border-top:1px solid #808080;border-bottom:1px solid #fff;margin:3px 0}
+.toast{position:fixed;right:6px;bottom:calc(46px + env(safe-area-inset-bottom,0px));background:#ffffe1;border:1px solid #000;padding:8px 10px;max-width:260px;z-index:9997;box-shadow:2px 2px #0005;animation:t .25s}
+@keyframes t{from{transform:translateY(10px);opacity:0}}
+body.crt::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:99999;background:repeating-linear-gradient(0deg,#0000 0 2px,#0003 2px 3px);box-shadow:inset 0 0 120px #0008}
+#bsod{position:fixed;inset:0;background:#00a;color:#fff;font:16px "Courier New",monospace;padding:8vw;z-index:100000;white-space:pre-wrap}
+[data-bank]{cursor:pointer}
+#reels{font-size:38px;text-align:center;letter-spacing:6px}
+</style>
+</head>
+<body>
+<div id="menu">
+  <div class="logo"><div style="font-size:12px;letter-spacing:3px">LUNI SYSTEMS PRESENTS</div><h1>Luni Mining 95 Ultimate</h1><div>Mining · Trading · Total Domination</div></div>
+  <div class="win static"><div class="tb"><span>🖥️ Welcome</span><span>v1.0</span></div><div class="body">
+    <div class="row"><button class="f" onclick="newSave()">🖥️ New Game</button><button onclick="dlg({nc:1,m:'Luni Mining 95 Ultimate v1.0\n\nA fictional mining and trading game. No real crypto or money.\nSaves live in this browser only.'})">ℹ️ About</button></div>
+    <div class="panel" id="saveList" style="max-height:38svh;overflow:auto"></div>
+    <div class="row"><button class="f" onclick="goOnline()">🌐 Play Online (multiplayer)</button></div>
+    <div class="row"><button class="f" onclick="impSave()">📥 Import save code</button></div>
+  </div></div>
+</div>
+<div id="game" class="hidden">
+  <div id="desk"></div>
+</div>
+<div id="tray"><button id="start" onclick="togSM(event)"><b>🪟 Start</b></button><div id="tasks"></div><span id="clock"></span></div>
+<div id="sm" class="hidden"><div class="side" onclick="toast('🔑 System passcode: '+CODE)">Luni95</div><div class="l" id="smi"></div></div>
+<script>
+const KEY='luni_osmining_saves_v1',PWR=.0004,BOT=18,$=q=>document.querySelector(q);
+const R=[['cpu','Old Pentium',.5,15,100,1,'🖥️'],['gpu','Voodoo Card',2,60,400,1,'🎮'],['gpu2','Quad-GPU Rig',8,150,1500,2,'🔥'],['asic','Luni ASIC-1',40,600,8000,3,'📟'],['farm','Basement Farm',250,3000,50000,6,'🏚️'],['dc','Data Center',2000,20000,4e5,10,'🏢'],['qc','Quantum Core',15000,90000,3e6,14,'⚛️'],['orb','Orbital Miner',120000,4e5,3e7,18,'🛰️'],['dys','Dyson Swarm',1e6,3e6,5e8,24,'☀️']].map(([id,n,mh,w,c,lv,e])=>({id,n,mh,w,c,lv,e}));
+const U=[{id:'cool',n:'Cooling Fans',d:'+10% hashrate each',c:300,e:'❄️',max:20},{id:'psu',n:'Efficient PSU',d:'−8% power bill each',c:400,e:'🔌',max:8},{id:'mouse',n:'Gold Mouse',d:'+0.05 LNC per click',c:200,e:'🖱️',max:25},{id:'bot',n:'Trading Bot',d:'Auto-sells all LNC at $'+BOT+'+',c:2500,e:'🤖',max:1},{id:'solar',n:'Solar Panels',d:'−5% power bill each',c:800,e:'🌞',max:10},{id:'ups',n:'Backup Generator',d:'Outages are 6s shorter each',c:1200,e:'🔋',max:3}];
+const ST=[['intern','Intern','Auto-mines LNC for you · pay $0.02/s',500,1,'🧑‍💻'],['eng','Engineer','+5% hashrate · pay $0.50/s',5000,4,'👷']],T=[['⛏️ Mine LNC',s=>s.tot,t=>5*Math.pow(3,t)],['💱 Make trades',s=>s.trades,t=>10*(t+1)],['💰 Net worth ($)',s=>nw(s),t=>1500*Math.pow(4,t)]];
+const rigsN=s=>Object.values(s.rigs).reduce((a,b)=>a+b,0),nw=s=>s.cash+s.bank-s.loan+s.coin*s.price;
+const A=[['first','First Coin','Mine your first LNC',s=>s.tot>0,100],['rig10','Rig Builder','Own 10 rigs',s=>rigsN(s)>=10,500],['k10','Five Figures','Net worth $10,000',s=>nw(s)>=1e4,500],['k100','Six Figures','Net worth $100,000',s=>nw(s)>=1e5,5e3],['mil','Millionaire','Net worth $1,000,000',s=>nw(s)>=1e6,5e4],['l5','Power User','Reach level 5',s=>s.lvl>=5,1e3],['trd','Day Trader','Make 25 trades',s=>s.trades>=25,500],['jack','Jackpot!','3 of a kind in Slots',s=>s.jack,1e3],['bot','Robot Overlord','Buy the Trading Bot',s=>s.up.bot>0,1e3],['boot','Fresh Install','Reboot your career',s=>s.reboots>0,5e3],['hire','Boss Mode','Hire 5 staff',s=>Object.values(s.st).reduce((a,b)=>a+b,0)>=5,1500],['bsod','Blue Screen','Crash from overheating',s=>s.bsod,500],['bil','Billionaire','Net worth $1,000,000,000',s=>nw(s)>=1e9,5e6],['rig50','Mega Farm','Own 50 rigs',s=>rigsN(s)>=50,5e3],['l15','Veteran','Reach level 15',s=>s.lvl>=15,1e4],['clk','Click Fever','Click MINE 500 times',s=>s.clicks>=500,1e3],['trd100','Wall Street Wolf','Make 100 trades',s=>s.trades>=100,3e3],['qc','Quantum Leap','Own a Quantum Core',s=>(s.rigs.qc||0)>0,2e4],['boot3','Seasoned Rebooter','Reboot 3 times',s=>s.reboots>=3,2e4],['bj','Card Shark','Win 10 blackjack hands',s=>s.bjw>=10,2e3]];
+const EV=[['🐋 A whale buys LNC! Price jumps.',{m:1.3}],['💥 Exchange hacked, panic selling!',{m:.7}],['📣 Celebrity tweets about LuniCoin!',{m:1.4}],['⚖️ Regulators investigate miners.',{m:.82}],['💿 New ASIC released, LNC dips.',{m:.9}],['⚡ Power outage! Mining halted 20s.',{out:20}],['💼 You found a lost wallet: +$250.',{cash:250}],['🐀 Rats chewed a cable: −$100 repairs.',{cash:-100}],['🎁 Uncle Luni mails you $500.',{cash:500}],['🧾 Surprise tax bill: −5% of your cash.',{cashp:-.05}],['📚 You read a mining tutorial: +60 XP.',{xp:60}],['🚀 LuniCoin is trending!',{m:1.25}],['🛠️ Exchange maintenance, prices dip.',{m:.88}],['🍕 Pizza Friday! Morale bonus: +$150.',{cash:150}]];
+const CODE='LUNI-0451',AM=()=>+$('#cha').value||0;
+const B=(l,c)=>`<button onclick="${c};upd()">${l}</button>`,CB=(k,l)=>`<label><input type="checkbox" data-cx="${k}" onchange="S.cx.${k}=this.checked"> ${l}</label><br>`,CS=(k,l,o)=>`<div class="row">${l} <select class="f" data-cxv="${k}" onchange="S.cx.${k}=+this.value">${o.map(v=>`<option value="${v}">${v?'×'+v:'Off'}</option>`).join('')}</select></div>`;
+const APPS={
+miner:{t:'Mining Rig',e:'⛏️',w:330,h:()=>`<div class="lcd" data-v="stat"></div><div class="panel">Hashrate <b data-v="hash"></b> (<span data-v="mult"></span> reboot)<br>Power <b data-v="pw"></b> · Bill <b data-v="bill"></b><br>Balance <b data-v="coin"></b> LNC</div><button class="big" onclick="mine()">⛏️ MINE!</button><div class="row"><button class="f" onclick="oc()">🔥 Overclock: <b data-v="oc"></b></button></div><div>Heat (100% = crash!)</div><div class="bar"><i data-w="heat"></i></div><fieldset><legend>Your hardware</legend>${R.map(r=>`<div class="row">${r.e} ${r.n}<b style="margin-left:auto" data-v="n_${r.id}"></b></div>`).join('')}</fieldset><div>Level <b data-v="lvl"></b> · <span data-v="xp"></span></div><div class="bar"><i data-bar="xp"></i></div>`},
+shop:{t:'Hardware Shop',e:'🛒',w:360,h:()=>`<div>Cash: <b data-v="cash"></b></div><div class="row">Rig buy amount: ${[1,10,25,500].map(q=>`<button onclick="BQ=${q};toast('Rig buying: ×${q==500?'Max':q}')">×${q==500?'Max':q}</button>`).join('')}</div><fieldset><legend>Rigs</legend>${R.map(r=>`<div class="item"><span style="font-size:24px">${r.e}</span><div><b>${r.n}</b> (own <span data-v="n_${r.id}"></span>)<small>${r.mh} MH/s · ${r.w} W · needs Lv ${r.lv}</small></div><button data-rig="${r.id}" onclick="buyRig('${r.id}')"></button></div>`).join('')}</fieldset><fieldset><legend>Upgrades</legend>${U.map(u=>`<div class="item"><span style="font-size:24px">${u.e}</span><div><b>${u.n}</b> <span data-v="l_${u.id}"></span><small>${u.d}</small></div><button data-up="${u.id}" onclick="buyUp('${u.id}')"></button></div>`).join('')}</fieldset>`},
+exch:{t:'Luni Exchange',e:'📈',w:340,h:()=>`<div class="lcd" style="font-size:24px" data-v="price"></div><canvas id="cv" width="320" height="110" style="width:100%;background:#000;border:2px solid;border-color:#808080 #fff #fff #808080;margin-top:6px"></canvas><div class="panel">📰 <span data-v="news"></span></div><div>Holding: <b data-v="hold"></b></div><div class="row"><input id="tq" type="number" min="0" step="0.001" value="1" class="f"><button onclick="fill('b')">Max buy</button><button onclick="fill('s')">All</button></div><div class="row"><button class="f" onclick="trade('b')">Buy LNC</button><button class="f" onclick="trade('s')">Sell LNC</button></div>`},
+bank:{t:'Luni Community Bank',e:'🏦',w:320,h:()=>`<div class="panel">Cash <b data-v="cash"></b><br>Savings <b data-v="bank"></b> (earns ~0.7%/min)<br>Loan <b data-v="loan"></b> (costs ~1.4%/min)<br>Credit limit <b data-v="lim"></b></div><div class="row"><input id="bq" type="number" min="1" value="100" class="f"></div><div class="row"><button class="f" onclick="bk('d')">Deposit</button><button class="f" onclick="bk('w')">Withdraw</button></div><div class="row"><button class="f" onclick="bk('b')">Borrow</button><button class="f" onclick="bk('r')">Repay</button></div>`},
+casino:{t:'Lucky Slots',e:'🎰',w:300,h:()=>`<div class="panel"><div id="reels">🎰 🎰 🎰</div><div id="cres" style="text-align:center">Match 3 for 10×, any pair returns your bet.</div></div><div>Cash <b data-v="cash"></b></div><div class="row"><input id="cb" type="number" min="1" value="50" class="f"><button onclick="spin()">🎰 Spin</button></div>`},
+trophy:{t:'Achievements',e:'🏆',w:340,h:()=>`<div class="panel">Net worth <b data-v="nw"></b><br>Total mined <b data-v="tot"></b> · Trades <b data-v="trades"></b> · Reboots <b data-v="boots"></b></div>${A.map(a=>`<div class="item"><span style="font-size:20px" data-v="a_${a[0]}"></span><div><b>${a[1]}</b><small>${a[2]} · +$${a[4].toLocaleString()}</small></div></div>`).join('')}<fieldset><legend>Reboot (prestige)</legend>Reach Lv 8, then reset everything for a permanent +25% hashrate.<div class="row"><button class="f" onclick="reboot()">♻️ Reboot Career</button></div></fieldset>`},
+quest:{t:'Missions',e:'📋',w:340,h:()=>`<div>Endless goals. Every one you finish pays more.</div>${T.map((t,i)=>`<div class="panel"><b>${t[0]}</b><div data-v="q${i}"></div><div class="bar"><i data-w="q${i}"></i></div><div class="row"><button class="f" data-q="${i}" onclick="claimQ(${i})">Claim reward</button></div></div>`).join('')}`},
+staff:{t:'HR Department',e:'👥',w:340,h:()=>`<div>Cash <b data-v="cash"></b> · Payroll <b data-v="pay"></b></div>${ST.map(x=>`<div class="item"><span style="font-size:24px">${x[5]}</span><div><b>${x[1]}</b> (hired <span data-v="s_${x[0]}"></span>)<small>${x[2]} · needs Lv ${x[4]}</small></div><button data-st="${x[0]}" onclick="hire('${x[0]}')"></button></div>`).join('')}`},
+cheat:{t:'Admin Console',e:'🛠️',w:390,hid:1,h:()=>`<div class="panel">🔓 Restricted. Amount used by <b>#</b> buttons: <input id="cha" type="number" value="1000" class="f" style="width:120px"></div>
+<fieldset><legend>💵 Cash &amp; bank</legend><div class="row">${B('+$1k','S.cash+=1e3')}${B('+$100k','S.cash+=1e5')}${B('+$10M','S.cash+=1e7')}${B('+$1B','S.cash+=1e9')}${B('+# $','S.cash+=AM()')}${B('Set # $','S.cash=AM()')}${B('Bank +#','S.bank+=AM()')}${B('Cash→Bank','S.bank+=S.cash;S.cash=0')}${B('Clear loan','S.loan=0')}${B('Go broke','S.cash=0;S.bank=0')}</div></fieldset>
+<fieldset><legend>🪙 LNC &amp; market</legend><div class="row">${B('+1k LNC','S.coin+=1e3')}${B('+1M LNC','S.coin+=1e6')}${B('+# LNC','S.coin+=AM()')}${B('Set # LNC','S.coin=AM()')}${B('Sell all','S.cash+=S.coin*S.price;S.coin=0')}${B('Price = #','S.price=Math.min(999,Math.max(1,AM()))')}${B('Price ×2','S.price=Math.min(999,S.price*2)')}${B('Price ÷2','S.price=Math.max(1,S.price/2)')}${B('Moon $999','S.price=999')}${B('Floor $1','S.price=1')}</div></fieldset>
+<fieldset><legend>⭐ Level &amp; prestige</legend><div class="row">${B('+100 XP','S.xp+=100;lv()')}${B('+5k XP','S.xp+=5e3;lv()')}${B('+1 Lv','S.lvl++')}${B('+5 Lv','S.lvl+=5')}${B('Set Lv #','S.lvl=Math.max(1,AM()|0);S.xp=0')}${B('Max Lv 99','S.lvl=99;S.xp=0')}${B('+1 Reboot','S.reboots++')}${B('−1 Reboot','S.reboots=Math.max(0,S.reboots-1)')}${B('Set Reboots #','S.reboots=Math.max(0,AM()|0)')}</div></fieldset>
+<fieldset><legend>🖥️ Hardware &amp; staff</legend><div class="row">${B('+1 of each rig','R.forEach(r=>S.rigs[r.id]=(S.rigs[r.id]||0)+1)')}${B('+10 of each','R.forEach(r=>S.rigs[r.id]=(S.rigs[r.id]||0)+10)')}${B('+# of each','R.forEach(r=>S.rigs[r.id]=(S.rigs[r.id]||0)+(AM()|0))')}${B('Reset rigs','S.rigs={cpu:1}')}${B('Max upgrades','U.forEach(u=>S.up[u.id]=u.max)')}${B('Reset upgrades','S.up={}')}${B('+10 interns','S.st.intern=(S.st.intern||0)+10')}${B('+10 engineers','S.st.eng=(S.st.eng||0)+10')}${B('Fire all','S.st={}')}${B('Cool down','S.heat=0;S.oc=false')}${B('Fix outage','S.out=0')}</div></fieldset>
+<fieldset><legend>🏆 Progress</legend><div class="row">${B('Unlock all trophies','A.forEach(a=>{if(!S.ach[a[0]]){S.ach[a[0]]=1;S.cash+=a[4]}})')}${B('Lock all trophies','S.ach={}')}${B('Skip missions +1','S.mt=S.mt.map(x=>x+1)')}${B('Reset missions','S.mt=[0,0,0]')}</div></fieldset>
+<fieldset><legend>⚙️ Toggles</legend>${CB('god','God mode (no power bill / payroll)')}${CB('noheat','Never overheat')}${CB('freeze','Freeze LNC price')}${CB('noev','No random events')}${CB('free','Everything in shops is free')}${CB('unl','Ignore level locks')}${CB('inf','Infinite cash ($1T floor)')}${CB('rig','Rigged casino (always win)')}${CS('mult','Hashrate',[1,2,5,10,100,1000])}${CS('auto','Auto-clicks per sec',[0,5,20,100])}${CS('spd','Game speed',[1,2,5,10])}</fieldset>
+<fieldset><legend>⏩ Time warp</legend><div class="row">${B('+1 min','warp(60)')}${B('+10 min','warp(600)')}${B('+1 hour','warp(3600)')}</div></fieldset>
+<fieldset><legend>🎲 Events</legend><div class="row">${B('Random','ev()')}${EV.map((e,i)=>B(e[0].split(' ')[0],'ev('+i+')')).join('')}${B('💀 BSOD','crash()')}${B('⚡ 60s outage','S.out=60')}</div></fieldset>
+<div class="row"><button class="f" onclick="unl=0;closeW('cheat')">🔒 Lock console</button></div>`},
+bj:{t:'Blackjack',e:'🃏',w:300,h:()=>`<div class="panel">Dealer: <b id="bjd">—</b><br>You: <b id="bjp">—</b><div id="bjr" style="margin-top:4px">Place a bet and deal. Blackjack pays 3:2.</div></div><div>Cash <b data-v="cash"></b></div><div class="row"><input id="bjb" type="number" min="1" value="100" class="f"><button onclick="bjDeal()">Deal</button></div><div class="row"><button class="f" id="bjh" onclick="bjHit()" disabled>Hit</button><button class="f" id="bjs" onclick="bjStand()" disabled>Stand</button></div>`},
+set:{t:'Control Panel',e:'⚙️',w:330,h:()=>`<fieldset><legend>Display &amp; Sound</legend><label><input type="checkbox" id="o1" onchange="S.snd=this.checked"> Sound</label><br><label><input type="checkbox" id="o2" onchange="S.crt=this.checked;applyOpt()"> CRT scanlines</label><div class="row">Wallpaper <select id="o3" class="f" onchange="S.wp=this.value;applyOpt()"><option value="#008080">Classic Teal</option><option value="#000080">Navy</option><option value="#2a2a2a">Charcoal</option><option value="#5a1d6a">Purple</option><option value="#206020">Forest</option><option value="#7a2040">Wine</option><option value="#000000">Black</option><option value="#8a6d3b">Desert</option></select></div><div class="row">Title bars <select id="o5" class="f" onchange="S.tb=this.value;applyOpt()"><option value="">Classic Navy</option><option value="#8a0050,#e0409a">Hot Pink</option><option value="#004000,#30b030">Green</option><option value="#803000,#e08030">Orange</option><option value="#202020,#707070">Graphite</option></select></div></fieldset><fieldset><legend>Save</legend><div class="row"><button class="f" onclick="saveNow(1)">💾 Save now</button><button class="f" onclick="expSave()">📤 Export</button></div></fieldset>`}
+};
+let saves={},S=null,Z=10,W={},foc=null,ac=null,tc=0,quiet=0,BQ=1,unl=0,BJ=null;
+function load(){try{saves=JSON.parse(localStorage.getItem(KEY)||'{}')||{}}catch(e){saves={}}}
+let blocked=0,warned=0;function persist(){try{localStorage.setItem(KEY,JSON.stringify(saves));blocked=0}catch(e){blocked=1;if(!warned){warned=1;toast('⚠️ Browser saving is blocked here. Use Export in the Control Panel to keep your progress.')}}return !blocked}
+const m=n=>'$'+n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+function beep(f=440,d=.06,t='square'){if(!S||!S.snd||quiet)return;try{ac=ac||new AudioContext();const o=ac.createOscillator(),g=ac.createGain();o.type=t;o.frequency.value=f;g.gain.value=.04;o.connect(g);g.connect(ac.destination);o.start();o.stop(ac.currentTime+d)}catch(e){}}
+function toast(t){if(quiet)return;const e=document.createElement('div');e.className='toast';e.textContent=t;document.body.append(e);setTimeout(()=>e.remove(),4200)}
+function norm(s){if(typeof s.rigs==='number')s.rigs={cpu:s.rigs};const d={rigs:{cpu:1},up:{},ach:{},price:10,hist:[],news:'Welcome to the Luni Exchange!',trades:0,tot:0,reboots:0,loan:0,out:0,snd:true,crt:false,wp:'#008080',cheats:false,cx:{},clicks:0,bjw:0,daily:'',streak:0,tb:'',cash:500,coin:0,bank:0,lvl:1,xp:0,st:{},mt:[0,0,0],oc:false,heat:0,bsod:0};for(const k in d)if(s[k]===undefined)s[k]=d[k];s.last=s.last||Date.now();return s}
+function newSave(){dlg({m:'Name your new career:',i:'My Mining Empire'},n=>{if(n===null)return;n=n.trim()||'My Mining Empire';const id='career_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);saves[id]=norm({id,name:n,created:Date.now()});persist();start(id,1)})}
+function renderSaves(){const b=$('#saveList');b.textContent='';const es=Object.values(saves).filter(s=>!s.online).sort((a,b)=>b.created-a.created);if(!es.length){b.textContent='No careers yet. Hit New Game!';return}
+ es.forEach(s=>{const el=document.createElement('div');el.className='item';const i=document.createElement('div');i.innerHTML='<b></b><small></small>';i.firstChild.textContent=s.name;i.lastChild.textContent='Lv '+s.lvl+' · '+m(s.cash||0)+' · '+(s.coin||0).toFixed(2)+' LNC';
+ const l=document.createElement('button');l.textContent='Load';l.onclick=()=>start(s.id);const r=document.createElement('button');r.textContent='✏️';r.onclick=()=>dlg({m:'Rename:',i:s.name},n=>{if(n&&n.trim()){s.name=n.trim();persist();renderSaves()}});const d=document.createElement('button');d.textContent='🗑️';d.onclick=()=>dlg({m:'Delete "'+s.name+'"?'},y=>{if(y){delete saves[s.id];persist();renderSaves()}});el.append(i,l,r,d);b.append(el)})}
+function stats(){let h=0,w=0;R.forEach(r=>{const n=S.rigs[r.id]||0;h+=n*r.mh;w+=n*r.w});const e=S.st.eng||0;return{hash:h*(1+.1*(S.up.cool||0)+.05*e)*(1+.25*S.reboots)*(S.oc?1.5:1)*(S.cx.mult||1)*(1+(S.cob||0)),pw:w*(1-Math.min(.9,.08*(S.up.psu||0)+.05*(S.up.solar||0)))*(S.oc?1.4:1)}}
+function start(id,fresh){S=norm(saves[id]);S.id=id;saves[id]=S;$('#menu').classList.add('hidden');$('#game').classList.remove('hidden');
+ $('#desk').innerHTML=Object.keys(APPS).filter(vis).map(k=>`<button class="ic" onclick="openApp('${k}')"><b>${APPS[k].e}</b>${APPS[k].t}</button>`).join('');
+ $('#smi').innerHTML=Object.keys(APPS).filter(vis).map(k=>`<button onclick="openApp('${k}');togSM()">${APPS[k].e} &nbsp;${APPS[k].t}</button>`).join('')+'<hr><button onclick="saveNow(1);togSM()">💾 Save</button><button onclick="quit()">🚪 Shut Down…</button>';
+ applyOpt();
+ if(!fresh){const el=Math.min((Date.now()-S.last)/1000,3600),st=stats();if(el>30&&st.hash){const g=st.hash*.002*el*.5;S.coin+=g;S.tot+=g;S.cash=Math.max(0,S.cash-st.pw*PWR*el*.5);toast('🌙 While you were away your rigs mined '+g.toFixed(2)+' LNC.')}}
+ const dd=new Date().toDateString();if(S.daily!==dd){S.streak=S.daily===new Date(Date.now()-864e5).toDateString()?S.streak+1:1;S.daily=dd;const bn=100*S.lvl*Math.min(S.streak,7);S.cash+=bn;toast('🎁 Daily bonus: '+m(bn)+' (day '+S.streak+' streak)')}
+ S.last=Date.now();openApp('miner');if(fresh){openApp('shop');[523,659,784,1046].forEach((f,i)=>setTimeout(()=>beep(f,.15,'triangle'),i*130))}upd()}
+function quit(){if(S&&S.online)oquit();togSM();saveNow();Object.keys(W).forEach(closeW);S=null;$('#game').classList.add('hidden');$('#menu').classList.remove('hidden');document.body.classList.remove('crt');document.body.style.removeProperty('--wp');renderSaves()}
+function applyOpt(){const t=(S.tb||'').split(',');document.body.style.setProperty('--t1',t[0]||'#000080');document.body.style.setProperty('--t2',t[1]||'#1084d0');document.body.classList.toggle('crt',!!S.crt);document.body.style.setProperty('--wp',S.wp)}
+function saveNow(v){if(!S)return;S.last=Date.now();if(persist()&&v)toast('💾 Career saved.')}
+function openApp(id){const a=APPS[id];if(W[id]){W[id].min=false;W[id].el.classList.remove('hidden');focusW(id);return}
+ const el=document.createElement('div'),w=Math.min(a.w,innerWidth-6),n=Object.keys(W).length;el.className='win';el.style.width=w+'px';el.style.left=Math.max(2,Math.min(96+n*28,innerWidth-w-4))+'px';el.style.top=(10+n*26)+'px';
+ el.innerHTML=`<div class="tb"><span>${id==='bank'?'<span data-bank>'+a.e+'</span>':a.e} ${a.t}</span><span><button data-m>_</button> <button data-x>×</button></span></div><div class="body">${a.h()}</div>`;$('#game').append(el);W[id]={el,min:false};
+ const tb=el.firstChild;tb.onpointerdown=e=>{if(e.target.closest('button,[data-bank]'))return;focusW(id);const r=el.getBoundingClientRect(),dx=e.clientX-r.left,dy=e.clientY-r.top;tb.setPointerCapture(e.pointerId);tb.onpointermove=v=>{el.style.left=Math.max(-w+60,Math.min(innerWidth-60,v.clientX-dx))+'px';el.style.top=Math.max(0,Math.min(innerHeight-90,v.clientY-dy))+'px'};tb.onpointerup=()=>tb.onpointermove=null};
+ el.onpointerdown=()=>{if(foc!==id)focusW(id)};tb.querySelector('[data-x]').onclick=()=>closeW(id);tb.querySelector('[data-m]').onclick=()=>{W[id].min=true;el.classList.add('hidden');foc=null;tasks()};
+ if(id==='set'){$('#o1').checked=S.snd;$('#o2').checked=S.crt;$('#o3').value=S.wp;$('#o5').value=S.tb||''}
+ if(id==='bank')tb.querySelector('[data-bank]').onclick=lock;
+ if(id==='cheat'){document.querySelectorAll('[data-cx]').forEach(c=>c.checked=!!S.cx[c.dataset.cx]);document.querySelectorAll('[data-cxv]').forEach(x=>x.value=S.cx[x.dataset.cxv]||x.options[0].value)}
+ if(id==='bj'&&BJ)bjUI();if(APPS[id].init)APPS[id].init();
+ focusW(id);upd()}
+function focusW(id){foc=id;W[id].el.style.zIndex=++Z;for(const k in W)W[k].el.classList.toggle('off',k!==id);tasks()}
+function closeW(id){W[id].el.remove();delete W[id];if(foc===id)foc=null;tasks()}
+function tasks(){$('#tasks').innerHTML='';for(const k in W){const b=document.createElement('button');b.textContent=APPS[k].e+' '+APPS[k].t;if(foc===k&&!W[k].min)b.className='on';b.onclick=()=>{if(foc===k&&!W[k].min){W[k].min=true;W[k].el.classList.add('hidden');foc=null;tasks()}else openApp(k)};$('#tasks').append(b)}}
+function togSM(e){$('#sm').classList.toggle('hidden');if(e)e.stopPropagation()}
+document.addEventListener('pointerdown',e=>{if(!e.target.closest('#sm,#start'))$('#sm').classList.add('hidden')});
+const fr=()=>S&&S.cx&&S.cx.free,rc=(r,n)=>fr()?0:Math.round(r.c*Math.pow(1.15,n)),uc=(u,l)=>fr()?0:Math.round(u.c*Math.pow(1.9,l)),sc=(x,n)=>fr()?0:Math.round(x[3]*Math.pow(1.25,n)),lk=l=>S.lvl<l&&!S.cx.unl;
+function mine(){const g=.05+.05*(S.up.mouse||0);S.coin+=g;S.tot+=g;S.xp+=.5;S.clicks++;beep(700+Math.random()*200,.03);lv();upd()}
+function oc(){S.oc=!S.oc;toast(S.oc?'🔥 Overclock ON: +50% hash, but watch the heat!':'❄️ Overclock off.');upd()}
+function hire(id){const x=ST.find(a=>a[0]===id),n=S.st[id]||0,c=sc(x,n);if(lk(x[4])||S.cash<c)return;S.cash-=c;S.st[id]=n+1;beep(560,.08);upd()}
+function claimQ(i){const t=T[i];if(t[1](S)<t[2](S.mt[i]))return;S.cash+=300*Math.pow(2.2,S.mt[i]);S.mt[i]++;beep(900,.2,'triangle');toast('📋 Mission complete!');upd()}
+function crash(){S.oc=false;S.heat=0;S.out=15;S.cash*=.9;S.bsod=1;const b=document.createElement('div');b.id='bsod';b.textContent='A fatal exception 0E has occurred at 0028:C0011E36 in VXD VMM(01).\n\nYour rigs overheated and the system halted. You lost 10% of your cash.\n\nRebooting…';document.body.append(b);setTimeout(()=>b.remove(),3500);beep(120,.5,'sawtooth')}
+function buyRig(id){const r=R.find(x=>x.id===id);let k=0;for(let i=0;i<BQ;i++){const n=S.rigs[id]||0,c=rc(r,n);if(lk(r.lv)||S.cash<c)break;S.cash-=c;S.rigs[id]=n+1;k++}if(k)beep(520,.08);upd()}
+function buyUp(id){const u=U.find(x=>x.id===id),l=S.up[id]||0;if(l>=u.max||S.cash<uc(u,l))return;S.cash-=uc(u,l);S.up[id]=l+1;beep(660,.08);upd()}
+function fill(k){$('#tq').value=k==='b'?Math.floor(S.cash/S.price*1e3)/1e3:Math.floor(S.coin*1e3)/1e3}
+function trade(k){if(S.online)return otrade(k);const q=+$('#tq').value;if(!(q>0))return toast('Enter a quantity.');if(k==='b'){if(S.cash<q*S.price-1e-9)return toast('Not enough cash.');S.cash-=q*S.price;S.coin+=q}else{if(S.coin<q-1e-9)return toast('Not enough LNC.');S.coin-=q;S.cash+=q*S.price}S.trades++;beep(k==='b'?600:400,.07);upd()}
+function bk(k){const q=+$('#bq').value;if(!(q>0))return toast('Enter an amount.');
+ if(k==='d'){if(q>S.cash)return toast('Not enough cash.');S.cash-=q;S.bank+=q}else if(k==='w'){if(q>S.bank)return toast('Not enough savings.');S.bank-=q;S.cash+=q}
+ else if(k==='b'){if(S.loan+q>S.lvl*2e3)return toast('Over your credit limit.');S.loan+=q;S.cash+=q}else{const p=Math.min(q,S.loan,S.cash);S.loan-=p;S.cash-=p}beep(500,.06);upd()}
+function spin(){const b=+$('#cb').value;if(!(b>0)||b>S.cash)return toast('Invalid bet.');S.cash-=b;const E=['🍒','🍋','🔔','💎','7️⃣'],r=[0,0,0].map(()=>S.cx.rig?'7️⃣':E[Math.random()*5|0]);$('#reels').textContent=r.join(' ');let w=0;if(r[0]==r[1]&&r[1]==r[2]){w=b*10;S.jack=1}else if(r[0]==r[1]||r[1]==r[2]||r[0]==r[2])w=b;S.cash+=w;$('#cres').textContent=w>b?'🎉 JACKPOT! +'+m(w-b):w==b?'Push: bet returned.':'You lost '+m(b)+'.';beep(w>b?880:180,.2);upd()}
+function reboot(){if(S.lvl<8)return toast('Reach level 8 first.');dlg({m:'Reboot? You lose cash, rigs and level but gain +25% hashrate forever.'},y=>{if(!y)return;Object.assign(S,{cash:500,coin:0,bank:0,loan:0,rigs:{cpu:1},up:{},lvl:1,xp:0,price:10,hist:[],reboots:S.reboots+1});toast('♻️ Rebooted! Hashrate bonus is now x'+(1+.25*S.reboots).toFixed(2));upd()})}
+function expSave(){const c=btoa(unescape(encodeURIComponent(JSON.stringify(S))));const fb=()=>dlg({m:'Copy your save code:',i:c,ta:1,nc:1});try{navigator.clipboard.writeText(c).then(()=>toast('📤 Save code copied to clipboard.'),fb)}catch(e){fb()}}
+function impSave(){dlg({m:'Paste a save code:',i:'',ta:1},c=>{if(!c)return;try{const s=norm(JSON.parse(decodeURIComponent(escape(atob(c.trim())))));s.id='career_'+Date.now().toString(36);s.created=Date.now();saves[s.id]=s;persist();renderSaves()}catch(e){dlg({m:'That save code is not valid.',nc:1})}})}
+function lv(){while(S.xp>=S.lvl*25){S.xp-=S.lvl*25;S.lvl++;toast('⭐ Level up! You are now level '+S.lvl+'.');beep(880,.2,'triangle')}}
+function ev(i){const [h,e]=EV[i??Math.random()*EV.length|0];S.news=h;if(e.m&&!S.online)S.price=Math.min(999,Math.max(1,S.price*e.m));if(e.out)S.out=Math.max(2,e.out-6*(S.up.ups||0));if(e.cash)S.cash=Math.max(0,S.cash+e.cash);if(e.xp){S.xp+=e.xp;lv()}if(e.cashp)S.cash*=1+e.cashp;toast(h);beep(300,.15,'sawtooth')}
+function V(){const s=S,st=stats(),v={cash:m(s.cash),coin:s.coin.toFixed(3),bank:m(s.bank),loan:m(s.loan),price:m(s.price)+' / LNC',hash:st.hash.toFixed(1)+' MH/s',pw:Math.round(st.pw).toLocaleString()+' W',bill:'$'+(st.pw*PWR).toFixed(3)+'/s',lvl:s.lvl,xp:Math.floor(s.xp)+' / '+s.lvl*25+' XP',nw:m(nw(s)),stat:s.out>0?'⚡ POWER OUTAGE':st.pw*PWR>s.cash?'⚠ CAN’T PAY POWER BILL':'● MINING…',news:s.news,hold:s.coin.toFixed(3)+' LNC ≈ '+m(s.coin*s.price),lim:m(s.lvl*2e3),tot:s.tot.toFixed(2)+' LNC',trades:s.trades,boots:s.reboots,mult:'x'+(1+.25*s.reboots).toFixed(2)};
+ R.forEach(r=>v['n_'+r.id]=s.rigs[r.id]||0);U.forEach(u=>v['l_'+u.id]=(s.up[u.id]||0)+'/'+u.max);A.forEach(a=>v['a_'+a[0]]=s.ach[a[0]]?'✅':'🔒');v.w={heat:s.heat};v.oc=s.oc?'ON':'OFF';v.pay='$'+((s.st.intern||0)*.02+(s.st.eng||0)*.5).toFixed(2)+'/s';ST.forEach(x=>v['s_'+x[0]]=s.st[x[0]]||0);T.forEach((t,i)=>{const tg=t[2](s.mt[i]),p=t[1](s);v['q'+i]=(Math.floor(p*100)/100).toLocaleString()+' / '+Math.round(tg).toLocaleString()+' · reward '+m(300*Math.pow(2.2,s.mt[i]));v.w['q'+i]=Math.min(100,p/tg*100)});return v}
+function upd(){if(!S)return;const v=V();document.querySelectorAll('[data-v]').forEach(e=>e.textContent=v[e.dataset.v]??'');
+ document.querySelectorAll('[data-bar]').forEach(e=>e.style.width=Math.min(100,S.xp/(S.lvl*25)*100)+'%');
+ document.querySelectorAll('[data-w]').forEach(e=>e.style.width=(v.w[e.dataset.w]||0)+'%');
+ document.querySelectorAll('[data-q]').forEach(b=>{const i=+b.dataset.q;b.disabled=T[i][1](S)<T[i][2](S.mt[i])});
+ document.querySelectorAll('[data-st]').forEach(b=>{const x=ST.find(a=>a[0]===b.dataset.st),c=sc(x,S.st[x[0]]||0);b.textContent=lk(x[4])?'🔒 Lv '+x[4]:'$'+c.toLocaleString();b.disabled=lk(x[4])||S.cash<c});
+ document.querySelectorAll('[data-rig]').forEach(b=>{const r=R.find(x=>x.id===b.dataset.rig),c=rc(r,S.rigs[r.id]||0);b.textContent=lk(r.lv)?'🔒 Lv '+r.lv:'$'+c.toLocaleString();b.disabled=lk(r.lv)||S.cash<c});
+ document.querySelectorAll('[data-up]').forEach(b=>{const u=U.find(x=>x.id===b.dataset.up),l=S.up[u.id]||0,c=uc(u,l);b.textContent=l>=u.max?'MAX':'$'+c.toLocaleString();b.disabled=l>=u.max||S.cash<c});
+ const cv=$('#cv');if(cv){const x=cv.getContext('2d'),h=S.hist,W2=cv.width,H=cv.height;x.fillStyle='#000';x.fillRect(0,0,W2,H);x.strokeStyle='#143';for(let i=1;i<4;i++){x.beginPath();x.moveTo(0,H*i/4);x.lineTo(W2,H*i/4);x.stroke()}if(h.length>1){const lo=Math.min(...h),hi=Math.max(...h)+.01;x.strokeStyle='#3f3';x.lineWidth=2;x.beginPath();h.forEach((p,i)=>{const px=i/(h.length-1)*W2,py=H-6-(p-lo)/(hi-lo)*(H-12);i?x.lineTo(px,py):x.moveTo(px,py)});x.stroke()}}
+ $('#clock').textContent=m(S.cash).slice(0,-3)+' · '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}
+function tick(){if(!S)return;for(let i=0;i<(S.cx.spd||1);i++)T1();upd()}
+function warp(n){quiet=1;const v=S.cx.noheat;S.cx.noheat=1;for(let i=0;i<n;i++)T1();S.cx.noheat=v;quiet=0;toast('⏩ Warped '+n+' seconds ahead.');upd()}
+function T1(){if(S.cx.inf&&S.cash<1e12)S.cash=1e12;if(S.cx.auto){const g=(.05+.05*(S.up.mouse||0))*S.cx.auto;S.coin+=g;S.tot+=g;S.xp+=.5*S.cx.auto}const st=stats();
+ const I=S.st.intern||0,E=S.st.eng||0;if(!S.cx.god)S.cash=Math.max(0,S.cash-I*.02-E*.5);if(I){const g=I*.025*(1+(S.up.mouse||0));S.coin+=g;S.tot+=g}
+ S.heat=Math.max(0,Math.min(100,S.heat+(S.oc?Math.max(.2,2.5-.1*(S.up.cool||0)):-3)));if(S.cx.noheat)S.heat=0;if(S.heat>=100)crash();
+ if(S.out>0)S.out--;else{const bill=S.cx.god?0:st.pw*PWR;if(S.cash>=bill){S.cash-=bill;const g=st.hash*.002;S.coin+=g;S.tot+=g;S.xp+=st.hash*.004}else S.cash=0}
+ S.bank*=1.00012;S.loan*=1.00024;
+ if(!S.online&&!S.cx.freeze)S.price=Math.min(999,Math.max(1,S.price+(10-S.price)*.002+S.price*(Math.random()-.5)*.06));S.hist.push(S.price);if(S.hist.length>90)S.hist.shift();
+ if(Math.random()<1/45&&!S.cx.noev)ev();
+ if(S.up.bot&&S.price>=BOT&&S.coin>.01){const g=S.coin*S.price;S.cash+=g;S.coin=0;S.trades++;toast('🤖 Trading Bot sold for '+m(g))}
+ lv();A.forEach(a=>{if(!S.ach[a[0]]&&a[3](S)){S.ach[a[0]]=1;S.cash+=a[4];toast('🏆 Achievement: '+a[1]+' (+$'+a[4].toLocaleString()+')');beep(988,.25,'triangle')}});
+ if(++tc%15===0)saveNow()}
+function dlg(o,cb){const d=document.createElement('div');d.className='win';d.style.cssText='position:fixed;left:50%;top:22%;transform:translateX(-50%);width:min(340px,calc(100vw - 12px));z-index:100002';d.innerHTML='<div class="tb"><span>Luni Mining 95 Ultimate</span></div><div class="body"><div class="dm" style="white-space:pre-wrap"></div><div class="row di"></div><div class="row"><button class="f dok">OK</button><button class="f dx">Cancel</button></div></div>';d.querySelector('.dm').textContent=o.m||'';let i=null;if(o.i!==undefined){i=document.createElement(o.ta?'textarea':'input');i.className='f';i.value=o.i;if(o.ta)i.rows=4;d.querySelector('.di').append(i)}else d.querySelector('.di').remove();if(o.nc)d.querySelector('.dx').remove();document.body.append(d);if(i){i.focus();i.select()}const end=v=>{d.remove();cb&&cb(v)};d.querySelector('.dok').onclick=()=>end(i?i.value:true);const x=d.querySelector('.dx');if(x)x.onclick=()=>end(i?null:false);if(i)i.onkeydown=e=>{if(e.key==='Enter'&&!o.ta)end(i.value);if(e.key==='Escape')end(null)}}
+function lock(){if(S&&S.online)return S.role==='owner'?openApp('mpadmin'):toast('⛔ Admin is owner-only online.');if(unl)return openApp('cheat');if($('#lk'))return;const d=document.createElement('div');d.id='lk';d.className='win';d.style.cssText='position:fixed;left:50%;top:28%;transform:translateX(-50%);width:280px;z-index:100001';d.innerHTML='<div class="tb"><span>🔒 Restricted Area</span></div><div class="body">Enter passcode:<div class="row"><input id="lkc" type="password" class="f" autocomplete="off"></div><div class="row"><button class="f" id="lko">OK</button><button class="f" id="lkx">Cancel</button></div></div>';document.body.append(d);const i=$('#lkc');i.focus();const go=()=>{if(i.value.trim().toUpperCase()===CODE){unl=1;d.remove();toast('🔓 Access granted.');beep(880,.15,'triangle');openApp('cheat')}else{i.value='';toast('⛔ Wrong passcode.');beep(150,.3,'sawtooth')}};$('#lko').onclick=go;$('#lkx').onclick=()=>d.remove();i.onkeydown=e=>{if(e.key==='Enter')go();if(e.key==='Escape')d.remove()}}
+const card=()=>{const r=Math.random()*13|0;return{v:r>9?10:r?r+1:11,l:['A',2,3,4,5,6,7,8,9,10,'J','Q','K'][r]}},bjT=h=>{let t=h.reduce((a,c)=>a+c.v,0),a=h.filter(c=>c.l=='A').length;while(t>21&&a--)t-=10;return t},bjS=(h,x)=>x?h[0].l+' ?':h.map(c=>c.l).join(' ')+' ('+bjT(h)+')';
+function bjUI(end){$('#bjp').textContent=bjS(BJ.p);$('#bjd').textContent=bjS(BJ.d,!end);$('#bjh').disabled=$('#bjs').disabled=!!end;upd()}
+function bjDeal(){if(BJ)return;const b=+$('#bjb').value;if(!(b>0)||b>S.cash)return toast('Invalid bet.');S.cash-=b;BJ={b,p:[card(),card()],d:[card(),card()]};$('#bjr').textContent='Hit or stand?';bjUI();if(bjT(BJ.p)==21)bjEnd();beep(500,.05)}
+function bjHit(){if(!BJ)return;BJ.p.push(card());bjUI();if(bjT(BJ.p)>=21)bjEnd()}
+function bjStand(){if(BJ)bjEnd()}
+function bjEnd(){const b=BJ.b,p=bjT(BJ.p);if(p<=21)while(bjT(BJ.d)<17)BJ.d.push(card());const d=bjT(BJ.d);let w=0,msg;if(p>21)msg='Bust! You lose '+m(b)+'.';else if(p==21&&BJ.p.length==2&&!(d==21&&BJ.d.length==2)){w=b*2.5;msg='Blackjack! +'+m(b*1.5)}else if(d>21||p>d||S.cx.rig){w=b*2;msg='You win! +'+m(b)}else if(p==d){w=b;msg='Push: bet returned.'}else msg='Dealer wins. −'+m(b);if(w>b)S.bjw++;S.cash+=w;bjUI(1);$('#bjr').textContent=msg;BJ=null;beep(w>b?880:180,.2)}
+addEventListener('keydown',e=>{if(!S||e.target.matches('input,select,textarea,button'))return;if(e.code==='Space'){e.preventDefault();mine()}});
+load();renderSaves();setInterval(tick,1000);setInterval(()=>{if(S)upd()},15000);
+addEventListener('beforeunload',()=>{if(S)saveNow()});
+<\/script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"><\/script>
+<script>
+/* ===== Luni-OSMining ONLINE module ===== */
+const SB_URL='https://cyjyuvrarekwlefxcqui.supabase.co',SB_KEY='sb_publishable_E2_jmyi7lsaceSdaVGeQAg_FvsDUTpb';
+const OL={msgs:[]},esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const BR=(()=>{try{return parent!==window&&parent.LUNI_BRIDGE||null}catch(e){return null}})();
+let sb=BR?BR.sb:null,pb=0;if(!sb)try{sb=supabase.createClient(SB_URL,SB_KEY)}catch(e){}
+const vis=k=>{const a=APPS[k];return !a.hid&&!(S&&S.online&&(k=='casino'||k=='bj'))&&!(a.on&&!(S&&S.online))&&!(a.own&&!(S&&S.role==='owner'))};
+const slim=()=>{const{hist,cx,...r}=S;return r};
+function ap(st,c0,n0){if(!S)return;S.cash=st.cash+(S.cash-c0);S.coin=st.coin+(S.coin-n0);OL.lc=st.cash;OL.ln=st.coin;
+ Object.assign(S,{role:st.role,name:st.name,muted:st.muted,fee:st.fee,news:st.news,motd:st.motd,co:st.co,price:st.price,cob:st.co?Math.min(.35,st.co.members*.01+Math.log10(1+st.co.treasury)*.01):0});
+ if(st.banned){toast('🚫 You have been banned.');quit()}}
+async function push(){if(!S||!S.online||pb)return;pb=1;try{const c0=S.cash,n0=S.coin,{data,error}=await sb.rpc('mine_sync',{p_dcash:c0-OL.lc,p_dcoin:n0-OL.ln,p_save:slim(),p_hash:stats().hash,p_level:S.lvl,p_nw:nw(S)});if(error)toast('⚠️ Sync: '+error.message);else ap(data,c0,n0)}finally{pb=0}}
+async function call(fn,args,fl=1){if(fl)await push();const c0=S.cash,n0=S.coin,{data,error}=await sb.rpc(fn,args);if(error){toast('⚠️ '+error.message);return null}if(data&&data.cash!==undefined)ap(data,c0,n0);upd();return data??true}
+async function goOnline(){toast('🌐 Connecting…');try{await goOnline2()}catch(e){dlg({m:'Online error: '+(e&&e.message||e),nc:1})}}
+async function goOnline2(){
+ if(!sb||SB_URL.includes('YOUR-'))return dlg({m:'Online mode is not configured yet.\nPut your Supabase URL and anon key at the top of the online script.',nc:1});
+ const{data:{session}}=await sb.auth.getSession();
+ if(!session){
+  if(BR){toast('Log in with GitHub first');return BR.login()}
+  if(top!==self)return dlg({m:'This page is running inside a preview frame, so GitHub login cannot work here.\nOpen the file from your real site (the https:// GitHub Pages address) in its own tab.',nc:1});
+  if(location.protocol==='file:')return dlg({m:'GitHub login does not work from a local file.\nUpload the page to your site (https://) and open it there.',nc:1});
+  try{sessionStorage.mpgo=1}catch(e){}
+  const{data:o,error:oe}=await sb.auth.signInWithOAuth({provider:'github',options:{redirectTo:location.href.split('#')[0].split('?')[0],skipBrowserRedirect:true}});
+  if(oe)return dlg({m:'Login error: '+oe.message,nc:1});
+  toast('➡️ Redirecting to GitHub…');return location.assign(o.url)}
+ const{data:st,error}=await sb.rpc('mine_ensure');if(error)return dlg({m:'Online error: '+error.message,nc:1});
+ if(st.banned)return dlg({m:'🚫 This account is banned.',nc:1});
+ const{data:sv}=await sb.from('mine_saves').select('data').eq('id',session.user.id).maybeSingle();
+ const s=norm({...(sv&&sv.data||{}),id:'__online',name:st.name,created:Date.now()});
+ Object.assign(s,{online:1,cx:{},last:Date.now(),cash:st.cash,coin:st.coin,price:st.price,hist:[st.price]});saves.__online=s;
+ OL.lc=st.cash;OL.ln=st.coin;OL.msgs=[];
+ start('__online',!sv);ap(st,st.cash,st.coin);
+ OL.t=setInterval(push,5000);
+ const{data:ms}=await sb.from('mine_messages').select('*').order('id',{ascending:false}).limit(30);OL.msgs=(ms||[]).reverse();
+ OL.ch=sb.channel('mp').on('postgres_changes',{event:'INSERT',schema:'public',table:'mine_messages'},p=>chatAdd(p.new))
+  .on('postgres_changes',{event:'INSERT',schema:'public',table:'mine_transfers',filter:'to_id=eq.'+session.user.id},p=>toast('💸 You received '+(p.new.asset=='cash'?m(p.new.amount):p.new.amount+' LNC')+'!')).subscribe();
+ toast('🌐 Online as '+st.name+(st.role=='owner'?' 👑':''));if(st.motd)setTimeout(()=>toast('📢 '+st.motd),1500)}
+function oquit(){push();clearInterval(OL.t);if(OL.ch)sb.removeChannel(OL.ch);OL.ch=null;delete saves.__online}
+addEventListener('unhandledrejection',e=>toast('⚠️ '+(e.reason&&e.reason.message||e.reason)));
+if(sb)sb.auth.getSession().then(r=>{if(r.data.session&&sessionStorage.mpgo){delete sessionStorage.mpgo;goOnline()}});
+async function otrade(k){const q=+$('#tq').value;if(!(q>0))return toast('Enter a quantity.');if(await call('mine_trade',{p_side:k,p_qty:q}))S.trades++}
+function chatAdd(r){OL.msgs.push(r);if(OL.msgs.length>80)OL.msgs.shift();chatDraw();if(r.kind==='sys'&&!W.chat)toast('📢 '+r.body)}
+function chatDraw(){const l=$('#chl');if(!l)return;l.innerHTML=OL.msgs.map(r=>r.kind==='sys'?`<div style="color:#800"><b>📢 ${esc(r.body)}</b></div>`:`<div>${r.company_id?'🏢 ':''}<b>${esc(r.username)}</b>: ${esc(r.body)}</div>`).join('');l.scrollTop=1e9}
+async function chatSend(){const i=$('#cht'),b=i.value.trim();if(!b)return;i.value='';await call('mine_post',{p_body:b,p_co:$('#chc').checked},0)}
+async function osend(){const u=$('#su').value.trim(),a=+$('#sa').value,k=$('#sk').value;if(!u||!(a>0))return toast('Enter a player and amount.');if(await call('mine_send',{p_to:u,p_asset:k,p_amt:a}))toast('💸 Sent '+(k=='cash'?m(a):a+' LNC')+' to '+u)}
+async function rNet(){const el=$('#nethub');if(!el)return;const[{data:p},{data:c},{count}]=await Promise.all([sb.from('mine_players').select('username,nw').order('nw',{ascending:false}).limit(15),sb.from('mine_companies').select('name,tag,treasury').order('treasury',{ascending:false}).limit(8),sb.from('mine_players').select('id',{count:'exact',head:true}).gt('last_seen',new Date(Date.now()-3e4).toISOString())]);
+ el.innerHTML=`<div class="panel">🟢 <b>${count}</b> online · transfer fee ${(S.fee*100).toFixed(1)}%</div><fieldset><legend>🏆 Richest players</legend>${(p||[]).map((x,i)=>`<div class="row">${i+1}. <b>${esc(x.username)}</b><span style="margin-left:auto">${m(x.nw)}</span></div>`).join('')}</fieldset><fieldset><legend>🏢 Top companies</legend>${(c||[]).map(x=>`<div class="row">[${esc(x.tag)}] ${esc(x.name)}<span style="margin-left:auto">${m(x.treasury)}</span></div>`).join('')||'None yet'}</fieldset>`}
+async function rCo(){const el=$('#cobox');if(!el)return;const c=S.co;
+ if(!c){const{data}=await sb.from('mine_companies').select('name,tag,treasury').order('treasury',{ascending:false}).limit(15);el.innerHTML=`<fieldset><legend>Found a company ($10,000)</legend><div class="row"><input id="cn" class="f" placeholder="Name"><input id="ct" style="width:60px" placeholder="TAG" maxlength="4"></div><button class="big" onclick="coNew()">Create</button></fieldset><fieldset><legend>Join one</legend>${(data||[]).map(x=>`<div class="item"><div><b>[${esc(x.tag)}] ${esc(x.name)}</b><small>${m(x.treasury)}</small></div><button data-n="${esc(x.name)}" onclick="coDo('mine_co_join',{p_name:this.dataset.n})">Join</button></div>`).join('')||'No companies yet.'}</fieldset>`;return}
+ const{data:mb}=await sb.from('mine_players').select('username,co_role').eq('company_id',c.id);
+ el.innerHTML=`<div class="panel"><b>[${esc(c.tag)}] ${esc(c.name)}</b><br>Treasury <b>${m(c.treasury)}</b> · ${c.members} members<br>Hashrate bonus <b>+${(S.cob*100).toFixed(0)}%</b> (grows with members &amp; treasury)</div><div class="row"><input id="cd" type="number" min="1" value="1000" class="f"><button onclick="coDep(1)">Deposit</button><button onclick="coDep(-1)">Withdraw</button></div><fieldset><legend>Members</legend>${(mb||[]).map(x=>`<div class="row"><b>${esc(x.username)}</b> ${x.co_role}<span style="margin-left:auto">${c.role=='owner'&&x.co_role!='owner'?`<button data-n="${esc(x.username)}" onclick="coDo('mine_co_kick',{p_user:this.dataset.n})">Kick</button>`:''}</span></div>`).join('')}</fieldset><button onclick="coDo('mine_co_leave',{})">🚪 Leave company</button>`}
+async function coDo(f,a){if(await call(f,a))rCo()}
+const coNew=()=>coDo('mine_co_create',{p_name:$('#cn').value,p_tag:$('#ct').value}),coDep=s=>coDo('mine_co_treasury',{p_amt:s*(+$('#cd').value||0)});
+async function adm(a,v){const r=await call('mine_admin',{p_act:a,p:{user:$('#au').value.trim().toLowerCase(),amt:+$('#aa').value||0,text:$('#at').value,name:$('#ac').value.trim(),v}},0);if(r==='ok')toast('✅ '+a+' done');rAdm()}
+async function rAdm(){const el=$('#adl');if(!el)return;const{data,error}=await sb.rpc('mine_admin_overview');if(error){el.textContent=error.message;return}
+ el.innerHTML=data.players.map(x=>`<div class="row" style="cursor:pointer" data-u="${esc(x.username)}" onclick="$('#au').value=this.dataset.u"><b>${esc(x.username)}</b> ${x.role}${x.banned?' 🚫':''}${x.muted?' 🔇':''}${x.flags?` <span style="color:#c00">🚩${x.flags}</span>`:''}<span style="margin-left:auto">${m(x.nw)}</span></div>`).join('')+'<hr>'+data.audit.map(x=>`<small style="display:block">${esc(x.who||'sys')}: ${esc(x.note)}</small>`).join('')}
+const AB=(l,a,f)=>`<button onclick="adm('${a}'${f?','+f:''})">${l}</button>`;
+Object.assign(APPS,{
+net:{t:'Online Hub',e:'🌐',w:340,on:1,init:rNet,h:()=>`<div class="row"><button onclick="rNet()">🔄 Refresh</button></div><div id="nethub">Loading…</div><fieldset><legend>💸 Send money</legend><div class="row"><input id="su" class="f" placeholder="username"></div><div class="row"><input id="sa" type="number" min="0" step="any" value="100" class="f"><select id="sk"><option value="cash">$ Cash</option><option value="coin">LNC</option></select></div><button class="big" onclick="osend()">Send</button></fieldset>`},
+co:{t:'Company',e:'🏢',w:340,on:1,init:rCo,h:()=>`<div id="cobox">Loading…</div>`},
+chat:{t:'Global Chat',e:'💬',w:340,on:1,init:chatDraw,h:()=>`<div class="panel" id="chl" style="height:210px;overflow:auto;user-select:text"></div><label><input type="checkbox" id="chc"> Company chat only</label><div class="row"><input id="cht" class="f" maxlength="200" onkeydown="if(event.key==='Enter')chatSend()"><button onclick="chatSend()">Send</button></div>`},
+mpadmin:{t:'Admin Console (MP)',e:'🛠️',w:400,on:1,own:1,init:rAdm,h:()=>`<div class="panel">👑 Owner only. Every action is verified on the server.</div><div class="row"><input id="au" class="f" placeholder="player username"><input id="aa" type="number" value="1000" style="width:90px"></div><fieldset><legend>👤 Player (amount box)</legend><div class="row">${AB('+$','give_cash')}${AB('+LNC','give_coin')}${AB('Ban','ban','true')}${AB('Unban','ban','false')}${AB('Mute','mute','true')}${AB('Unmute','mute','false')}${AB('Wipe','wipe')}${AB('Clear 🚩','unflag')}</div></fieldset><fieldset><legend>📈 Economy (amount box)</legend><div class="row">${AB('Set price','price')}${AB('Price ×amt','mult')}${AB('Freeze','freeze','true')}${AB('Unfreeze','freeze','false')}${AB('Set fee %','fee')}${AB('🌧️ $ to everyone','rain')}</div></fieldset><fieldset><legend>📢 Broadcast</legend><div class="row"><input id="at" class="f" placeholder="text"></div><div class="row">${AB('Announce','broadcast')}${AB('Set MOTD','motd')}${AB('News headline','news')}</div></fieldset><fieldset><legend>🏢 Company</legend><div class="row"><input id="ac" class="f" placeholder="company name"></div><div class="row">${AB('+$ treasury','co_funds')}${AB('Disband','disband')}</div></fieldset><fieldset><legend>🚩 Players (tap to select) &amp; log</legend><div id="adl">Loading…</div></fieldset>`}});
+<\/script>
+</body>
+</html>
+</script>
+<script>
+/* Luni Mining 95 Ultimate: the game page is stored above (inert text) and opened in a same-origin frame.
+   It reuses this site's Supabase client, so the site's GitHub login is the game login. */
+(()=>{
+ if(typeof APPS==='undefined'||typeof win!=='function'||typeof sb==='undefined')return;
+ window.LUNI_BRIDGE={sb,login,isOwner:()=>isOwner(),me:()=>me};
+ if(APPS.some(a=>a[0]==='mining'))return;
+ const src=()=>document.getElementById('mining-src').textContent.replace(/<\\\/script/g,'</script').replace(/<\\!--/g,'<!--');
+ APPS.push(['mining','Luni Mining 95 Ultimate','🪙',b=>{b.style.padding='0';b.style.overflow='hidden';
+  b.append(h('iframe',{srcdoc:src(),allow:'fullscreen',title:'Luni Mining 95 Ultimate',style:'width:100%;height:100%;border:0;background:#008080'}))},800,620]);
+ desk();
+})();
+</script>
 </body></html>
