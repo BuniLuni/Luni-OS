@@ -1637,7 +1637,7 @@ addEventListener('pointerdown',e=>{if(!e.target.closest('#ctx'))$('#ctx').classL
 addEventListener('keydown',e=>e.key==='Escape'&&$('#ctx').classList.remove('on'));
 addEventListener('contextmenu',e=>{if(!e.target.closest('input,textarea'))e.preventDefault()});
 function tray(){
- const t=$('#tray');t.replaceChildren(nowp?h('span',{},'♪ '+nowp.slice(0,18)+' '):'',VC?h('button',{on:{click:()=>openApp('voice')}},'🎙 '+VC.name):'',Object.keys(onl).length?h('button',{on:{click:()=>openApp('online')}},'● '+Object.keys(onl).length):'',me&&unreadTotal()?h('button',{on:{click:()=>openApp('dm')}},'💌 '+unreadTotal()):'',me?h('button',{title:'Set status',on:{click:()=>openApp('status')}},stDot(me.id,effSt()),(MYST.t?' '+MYST.t.slice(0,12):'')):'',me?h('button',{on:{click:()=>openApp('levels')}},'⭐ Lv '+lvOf(LV.xp)):'',me?h('button',{on:{click:async()=>{await sb.auth.signOut()}}},`${dn(me)} [${me.role}] - log out`):h('button',{on:{click:login}},'Log in with GitHub'),me?'':pwLoginForm(),' ',h('span',{id:'clk'}));clock()}
+ const t=$('#tray');t.replaceChildren(nowp?h('span',{},'♪ '+nowp.slice(0,18)+' '):'',VC?h('button',{on:{click:()=>openApp('voice')}},'🎙 '+VC.name):'',Object.keys(onl).length?h('button',{on:{click:()=>openApp('online')}},'● '+Object.keys(onl).length):'',me&&unreadTotal()?h('button',{on:{click:()=>openApp('dm')}},'💌 '+unreadTotal()):'',me?h('button',{title:'Set status',on:{click:()=>openApp('status')}},stDot(me.id,effSt()),(MYST.t?' '+MYST.t.slice(0,12):'')):'',me?h('button',{on:{click:()=>openApp('levels')}},'⭐ Lv '+lvOf(LV.xp)):'',me?h('button',{on:{click:async()=>{userLogout=true;await sb.auth.signOut()}}},`${dn(me)} [${me.role}] - log out`):h('button',{on:{click:login}},'Log in with GitHub'),me?'':pwLoginForm(),' ',h('span',{id:'clk'}));clock()}
 const clock=()=>{const c=$('#clk');if(c)c.textContent=new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})};
 async function loadMe(){
   voiceLeave();
@@ -1690,14 +1690,21 @@ $('#start').onclick=()=>$('#menu').classList.toggle('on');
 $('#desk').onclick=()=>$('#menu').classList.remove('on');
 /* supabase re-fires SIGNED_IN (and refreshes tokens) whenever the tab regains focus.
    Reloading on those would call voiceLeave(), so only reload when the user actually changed. */
-let curUid=null;
+let curUid=null,userLogout=false,authIssues=[];
+async function authDiag(){const bad=[];
+ try{localStorage.setItem('_t','1');if(localStorage.getItem('_t')!=='1')throw 0;localStorage.removeItem('_t')}catch{bad.push('Your browser is blocking site storage (cookies / local data), so your login cannot be kept.')}
+ try{const r=await fetch(location.href,{method:'HEAD',cache:'no-store'}),d=Date.parse(r.headers.get('date')||'');if(d){const m=Math.round((Date.now()-d)/6e4);if(Math.abs(m)>=2)bad.push('Your device clock is '+Math.abs(m)+' minutes '+(m>0?'ahead':'behind')+'. A wrong clock makes logins expire immediately. Set date and time to automatic.')}}catch{}
+ authIssues=bad;if(bad.length){console.warn('login diagnostics',bad);authBanner('We found a problem that can cause logouts:')}}
+function authBanner(head){if($('#authhelp'))return;const tips=[...authIssues,'Make sure the site is allowed to save cookies and site data (no strict tracking protection or school restrictions).','Use only one tab, and not a private/incognito window.','Then press Log in with GitHub again.'];
+ const d=h('div',{id:'authhelp',className:'w',style:'left:50%;top:3rem;transform:translateX(-50%);width:min(24rem,calc(100vw - 1rem));min-width:0;min-height:0;resize:none;z-index:10001'},h('div',{className:'tb'},h('span',{},'⚠️ Login problem'),h('button',{on:{click:()=>d.remove()}},'×')),h('div',{className:'body'},h('p',{},head),...tips.map(t=>h('div',{style:'margin:0.25rem 0'},'• '+t))));document.body.append(d)}
 sb?.auth.onAuthStateChange((ev,session)=>{
+  if(ev==='SIGNED_OUT'){if(!userLogout&&curUid)authBanner('You were logged out unexpectedly.');userLogout=false}
   if(ev==='TOKEN_REFRESHED')return;
   const uid=session?.user?.id||null;
   if((ev==='SIGNED_IN'||ev==='INITIAL_SESSION')&&me&&uid===curUid)return;
   setTimeout(loadMe,0)});
 $('#ver').append(Object.assign(document.createElement('span'),{className:'vf',textContent:`Client ${VER.client} | Server ${VER.server}`}),Object.assign(document.createElement('span'),{className:'vs',textContent:`C${VER.client} S${VER.server}`}));$('#ver').title=`Client version ${VER.client}, server version ${VER.server}`;
-applySettings();loadMe();loadAnn();setInterval(clock,20000);
+applySettings();loadMe();loadAnn();authDiag();setInterval(clock,20000);
 </script><script>
 /* Luni's Thing - WebXR add-on (Meta Quest). Load AFTER the main script.
    Every open window, the desktop, taskbar, start menu, right-click menu and toasts become floating 3D panels.
