@@ -290,7 +290,7 @@ if(me&&(can('delete_messages')||me.id===m.user_id))
  w.onclose=()=>sb.removeChannel(ch);
  b.style.cssText+=';display:flex;flex-direction:column;padding:0.25rem';fillC();
  b.append(h('div',{className:'bar'},csel,mk),list,pick,h('div',{className:'bar',style:'margin:0.25rem 0 0'},h('button',{on:{click:()=>pick.style.display=pick.style.display==='none'?'flex':'none'}},'😀'),can('images')?h('button',{on:{click:()=>file.click()}},'🖼'):'',inp),file);
- if(!me)b.append(h('button',{on:{click:login}},'Log in with GitHub'),h('button',{on:{click:()=>openApp('settings')}},'Password login'));gate();load();
+ if(!me)b.append(h('button',{on:{click:login}},'Log in with GitHub'),pwLoginForm());gate();load();
 }
 
 /* ---- owner powers: effects are broadcast; receivers verify the sender really is an owner, honour the opt-out, and every effect is temporary ---- */
@@ -1223,12 +1223,17 @@ const WP={Grape:['#4a2d85','#2b1b4d'],Teal:['#1d6b6b','#0d2e35'],Cherry:['#8a1f4
 function applySettings(){const s=store.get('set',{wp:'Grape',scan:true}),c=WP[s.wp]||WP.Grape;document.documentElement.style.setProperty('--ui',s.ui||1);document.body.style.background=`radial-gradient(circle at 30% 20%,${c[0]},${c[1]} 60%)`;document.body.classList.toggle('noscan',!s.scan)}
 /* ---- username + password login (so people can get in when GitHub is blocked). Needs luni_password_login.sql ---- */
 const pwEmail=u=>String(u).trim().toLowerCase()+'@login.luni.invalid';
-function pwLoginForm(){
- if(!sb)return h('span');
- const u=h('input',{placeholder:'username',autocomplete:'username',maxLength:24,style:'width:100%;margin-top:0.25rem'}),p=h('input',{type:'password',placeholder:'password',autocomplete:'current-password',style:'width:100%;margin-top:0.25rem'});
- const go=async()=>{const n=u.value.trim();if(!n||!p.value)return toast('Enter your username and password');const{error}=await sb.auth.signInWithPassword({email:pwEmail(n),password:p.value});p.value='';toast(error?'Wrong username or password':'Logged in')};
- p.onkeydown=e=>{if(e.key==='Enter')go()};
- return h('div',{style:'margin-top:0.5rem;border-top:1px dotted var(--lo);padding-top:0.375rem'},h('div',{},'Or log in without GitHub:'),u,p,h('div',{className:'bar',style:'margin-top:0.25rem'},h('button',{on:{click:go}},'Log in')),h('small',{style:'opacity:.7'},'Set this up in Settings after logging in with GitHub once.'))}
+function pwLoginDialog(){
+ if(!sb)return toast('Backend not set up');if($('#pwdlg'))return $('#pwdlg input').focus();
+ const u=h('input',{placeholder:'username',autocomplete:'username',maxLength:24,style:'width:100%;margin:0.25rem 0'}),p=h('input',{type:'password',placeholder:'password',autocomplete:'current-password',style:'width:100%;margin:0.25rem 0'}),
+  d=h('div',{id:'pwdlg',className:'w',style:'left:50%;top:22%;transform:translateX(-50%);width:min(20rem,calc(100vw - 1rem));min-width:0;min-height:0;resize:none;z-index:10001'}),
+  close=()=>d.remove(),
+  go=async()=>{const n=u.value.trim();if(!n||!p.value)return toast('Enter your username and password');go.b.disabled=true;const{error}=await sb.auth.signInWithPassword({email:pwEmail(n),password:p.value});go.b.disabled=false;p.value='';if(error)return toast('Wrong username or password');toast('Logged in');close()};
+ go.b=h('button',{on:{click:()=>go()}},'Log in');
+ p.onkeydown=u.onkeydown=e=>{if(e.key==='Enter')go();if(e.key==='Escape')close()};
+ d.append(h('div',{className:'tb'},h('span',{},'🔑 Log in without GitHub'),h('button',{on:{click:close}},'×')),h('div',{className:'body'},h('div',{},'Username'),u,h('div',{},'Password'),p,h('div',{className:'bar'},go.b,h('button',{on:{click:close}},'Cancel')),h('small',{style:'opacity:.7'},'Set a username and password in Settings after logging in with GitHub once.')));
+ document.body.append(d);u.focus()}
+const pwLoginForm=()=>sb?h('button',{on:{click:pwLoginDialog}},'Login without GitHub'):h('span');
 function pwSettings(b){
  const st=h('div',{},'Checking…'),u=h('input',{placeholder:'choose a username',autocomplete:'username',maxLength:24,style:'width:100%;margin-top:0.25rem',value:String(me.login||'').toLowerCase().replace(/[^a-z0-9_.-]/g,'').slice(0,24)}),
   p1=h('input',{type:'password',placeholder:'new password (8+ characters)',autocomplete:'new-password',maxLength:72,style:'width:100%;margin-top:0.25rem'}),p2=h('input',{type:'password',placeholder:'repeat password',autocomplete:'new-password',maxLength:72,style:'width:100%;margin-top:0.25rem'}),
@@ -1632,7 +1637,7 @@ addEventListener('pointerdown',e=>{if(!e.target.closest('#ctx'))$('#ctx').classL
 addEventListener('keydown',e=>e.key==='Escape'&&$('#ctx').classList.remove('on'));
 addEventListener('contextmenu',e=>{if(!e.target.closest('input,textarea'))e.preventDefault()});
 function tray(){
- const t=$('#tray');t.replaceChildren(nowp?h('span',{},'♪ '+nowp.slice(0,18)+' '):'',VC?h('button',{on:{click:()=>openApp('voice')}},'🎙 '+VC.name):'',Object.keys(onl).length?h('button',{on:{click:()=>openApp('online')}},'● '+Object.keys(onl).length):'',me&&unreadTotal()?h('button',{on:{click:()=>openApp('dm')}},'💌 '+unreadTotal()):'',me?h('button',{title:'Set status',on:{click:()=>openApp('status')}},stDot(me.id,effSt()),(MYST.t?' '+MYST.t.slice(0,12):'')):'',me?h('button',{on:{click:()=>openApp('levels')}},'⭐ Lv '+lvOf(LV.xp)):'',me?h('button',{on:{click:async()=>{await sb.auth.signOut()}}},`${dn(me)} [${me.role}] - log out`):h('button',{on:{click:login}},'Log in with GitHub'),' ',h('span',{id:'clk'}));clock()}
+ const t=$('#tray');t.replaceChildren(nowp?h('span',{},'♪ '+nowp.slice(0,18)+' '):'',VC?h('button',{on:{click:()=>openApp('voice')}},'🎙 '+VC.name):'',Object.keys(onl).length?h('button',{on:{click:()=>openApp('online')}},'● '+Object.keys(onl).length):'',me&&unreadTotal()?h('button',{on:{click:()=>openApp('dm')}},'💌 '+unreadTotal()):'',me?h('button',{title:'Set status',on:{click:()=>openApp('status')}},stDot(me.id,effSt()),(MYST.t?' '+MYST.t.slice(0,12):'')):'',me?h('button',{on:{click:()=>openApp('levels')}},'⭐ Lv '+lvOf(LV.xp)):'',me?h('button',{on:{click:async()=>{await sb.auth.signOut()}}},`${dn(me)} [${me.role}] - log out`):h('button',{on:{click:login}},'Log in with GitHub'),pwLoginForm(),' ',h('span',{id:'clk'}));clock()}
 const clock=()=>{const c=$('#clk');if(c)c.textContent=new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})};
 async function loadMe(){
   voiceLeave();
