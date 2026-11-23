@@ -248,7 +248,8 @@ async function chat(b,w){
  const gate=()=>{const ok=!lock&&canPost(cc());inp.disabled=!ok;
   inp.placeholder=lock?'Chat is locked by staff':!me?'Log in to chat':!can('chat')?'You cannot chat':!canPost(cc())?'You cannot post in this channel':'Say something'};
  const fillC=()=>csel.replaceChildren(...chs.map(c=>h('option',{value:c.id,selected:c.id===cur},'# '+c.name+((c.post_roles?.length||c.post_users?.length)?' 🔒':''))));
- const add=async m=>{if(!P[m.user_id]){const{data}=await sb.from('profiles').select(PCOLS).eq('id',m.user_id).maybeSingle();if(data)P[m.user_id]=data}
+ const add=async m=>{if(m.bot_id){const r=botMsgRow(m,rich,async()=>{const{error}=await sb.from('messages').delete().eq('id',m.id);if(error)return toast(error.message);r.remove()},!!me&&(can('delete_messages')||me.id===m.user_id),'m');list.append(r);list.scrollTop=1e9;return}
+  if(!P[m.user_id]){const{data}=await sb.from('profiles').select(PCOLS).eq('id',m.user_id).maybeSingle();if(data)P[m.user_id]=data}
   const p=P[m.user_id]||{login:m.login,role:'user'},a=av(p),op=()=>P[m.user_id]&&openProfile(p);
   const r=h('div',{className:'msg',id:'m'+m.id},a?h('img',{src:a,width:22,height:22,style:'vertical-align:middle;margin-right:0.3125rem;cursor:pointer;border:1px solid var(--ink);object-fit:cover',on:{click:op}}):'',h('b',{style:'color:'+rc(p.role)+';cursor:pointer',on:{click:op}},dn(p)),badge(p.role),lvTag(m.user_id),p.display_name&&p.display_name!==p.login?h('small',{style:'opacity:.6'},' @'+p.login):'',': ',colSpan(m.user_id,rich(m.body||'')));
   if(m.image_url&&CHATIMG.test(m.image_url))r.append(h('div',{},h('img',{src:m.image_url,loading:'lazy',style:'max-width:100%;max-height:13.75rem;cursor:zoom-in',on:{click:()=>window.open(m.image_url,'_blank','noopener')}})));
@@ -1007,7 +1008,7 @@ function shop(b,pre){
  bar.append(h('button',{on:{click:make}},'Make an app'),h('button',{on:{click:makeLinux}},'Make a JS Linux app'),h('button',{on:{click:browse}},'Browse JS Shop'));
  b.append(bar,pane);make();
 }
-const PERMS={chat:'Send messages',images:'Upload images',create_channels:'Create channels',manage_channels:'Delete channels and set who can post',voice_mod:'Kick and force-mute in voice channels',screenshare:'Share screen in voice channels',delete_messages:'Delete any message',publish_apps:'Publish apps',share_jslinux:'Share JS Linux apps in JS Shop',delete_apps:'Delete any app',manage_emojis:'Manage custom emojis',ban:'Ban / unban',manage_roles:'Create roles and assign them',announce:'Post announcements',site_settings:'Change site settings',view_audit:'View audit log',bypass:'Bypass locks and size limits',admin_panel:'Open the admin panel',notify:'Send notifications to users'};
+const PERMS={chat:'Send messages',images:'Upload images',create_channels:'Create channels',manage_channels:'Delete channels and set who can post',voice_mod:'Kick and force-mute in voice channels',screenshare:'Share screen in voice channels',delete_messages:'Delete any message',publish_apps:'Publish apps',share_jslinux:'Share JS Linux apps in JS Shop',delete_apps:'Delete any app',manage_emojis:'Manage custom emojis',ban:'Ban / unban',manage_roles:'Create roles and assign them',announce:'Post announcements',site_settings:'Change site settings',view_audit:'View audit log',bypass:'Bypass locks and size limits',admin_panel:'Open the admin panel',notify:'Send notifications to users',create_bots:'Create bots (Bot Creator app)',manage_bots:'Manage all bots and add bots to global channels'};
 async function admin(b){
  if(!staff())return b.append('Staff only.');
  const pane=h('div'),bar=h('div',{className:'bar'}),log=a=>sb.from('audit').insert({actor:me.login,action:a});
@@ -1131,10 +1132,11 @@ async function admin(b){
   const on=()=>{if(!l.isConnected)return document.removeEventListener('rep-change',on);if(pane.contains(flt))draw()};document.addEventListener('rep-change',on);
   flt.onchange=draw;pane.replaceChildren(h('div',{className:'bar'},flt,h('button',{on:{click:draw}},'Refresh')),l);draw()},
  Log:async()=>{const d=(await sb.from('audit').select('*').order('created_at',{ascending:false}).limit(60)).data||[];pane.replaceChildren(...d.map(r=>h('div',{className:'row'},`${new Date(r.created_at).toLocaleString()} - ${r.actor}: ${r.action}`)),d.length?'':'Nothing logged yet.')},
+ Bots:()=>adminBots(pane,log,()=>T.Bots()),
  Stats:async()=>{const day=new Date(Date.now()-864e5).toISOString();const v=await Promise.all([cnt('profiles'),cnt('profiles',q=>q.eq('role','banned')),cnt('messages'),cnt('messages',q=>q.gte('created_at',day)),cnt('apps')]);
   pane.replaceChildren(...['Users','Banned','Messages','Messages (24h)','Apps'].map((n,i)=>h('div',{className:'row'},`${n}: ${v[i]}`)))}
  };
- const NEED={Users:'ban',Chat:'delete_messages',Apps:'delete_apps',Announce:'announce',Settings:'site_settings',Log:'view_audit',Roles:'manage_roles',Emojis:'manage_emojis',Channels:'manage_channels',Stats:'admin_panel',Notify:'notify',Roleplay:'admin_panel',Reports:'admin_panel'};
+ const NEED={Users:'ban',Chat:'delete_messages',Apps:'delete_apps',Announce:'announce',Settings:'site_settings',Log:'view_audit',Roles:'manage_roles',Emojis:'manage_emojis',Channels:'manage_channels',Stats:'admin_panel',Notify:'notify',Roleplay:'admin_panel',Reports:'admin_panel',Bots:'manage_bots'};
  const keys=Object.keys(T).filter(k=>can(NEED[k])||(k==='Users'&&can('manage_roles')));
  keys.forEach(k=>bar.append(h('button',{on:{click:()=>{pane.textContent='Loading...';T[k]()}}},k)));
  b.append(bar,pane);T[keys[0]]();
@@ -1572,7 +1574,552 @@ function nesApp(b){
  f.addEventListener('load',()=>{try{f.contentWindow.focus()}catch{}});
  b.append(f);
 }
-const APPS=[['weather','Weather','☁',weather],['rss','News','📰',rss],['radio','Radio','📻',radio,360,420],['chat','Global Chat','💬',chat,400,440],['voice','Voice','🎙',voice,480,540],['profile','My Profile','🪪',profileApp,360,470],['online',"Who's Online",'🟢',online,320,380],['people','People','👤',peopleApp,400,500],['shop','JS Shop','🛒',shop,500,560],['builder','App Builder','🧱',builder,500,540],['calc','Calculator','🧮',calc,270,340],['paint','Paint','🎨',paint,430,420],['snake','Snake','🐍',snake,350,400],['nes','NES Emulator','🎮',nesApp,560,560],['term','JS Linux','🐧',jslinuxApp,720,520],['notes','Notepad','📝',notes,340,300],['levels','Levels','⭐',levelsApp,360,440],['clicker','Cookie Clicker','🍪',clicker,360,480],['dm','Messages','💌',dmApp,520,420],['powers','Powers','⚡',powers,480,620],['groups','Group Chats','👥',groupsApp,540,440],['report','Report','🚩',reportApp,440,480],['status','Status','🟢',statusApp,340,540],['rp','Roleplay','RP',rpApp,500,520],['settings','Settings','⚙',settings,360,480],['admin','Admin','🛡',admin,540,480],['about','About','💾',about,400,440],['bin','Recycle Bin','🗑',binApp,380,340]];
+/* =====================================================================
+   BOTS + SERVERS  (needs BOTS_SERVERS_SQL.txt to have been run in Supabase)
+   ===================================================================== */
+const SRV_PERMS={send_messages:'Send messages',attach_images:'Attach images',manage_messages:"Delete other people's messages",manage_channels:'Create, edit and delete channels',manage_roles:'Create roles and assign them',manage_server:'Edit server and see all invites',create_invites:'Create invite codes',kick_members:'Kick members',ban_members:'Ban / unban members',manage_emojis:'Manage emojis and stickers',manage_bots:'Add and remove bots'};
+const BOT_TPL={js:String.raw`// Your bot runs in a sandbox (no page access, no network).
+// Commands start with the bot's prefix, e.g. !ping
+bot.on('ready', () => console.log(bot.name + ' is online'));
+
+bot.command('ping', ctx => ctx.reply('Pong!'));
+
+bot.command('roll', ctx => {
+  const sides = Math.max(1, parseInt(ctx.args[0]) || 6);
+  ctx.reply('🎲 You rolled a ' + (1 + Math.floor(Math.random() * sides)));
+});
+
+bot.command('8ball', ctx => {
+  const a = ['Yes.', 'No.', 'Maybe.', 'Ask again later.', 'Definitely!', 'Doubtful.'];
+  ctx.reply(a[Math.floor(Math.random() * a.length)]);
+});
+
+bot.command('help', ctx => ctx.say('Commands: ' + ['ping', 'roll [sides]', '8ball'].map(c => bot.prefix + c).join(', ')));
+
+bot.on('message', msg => {
+  if (!msg.command && /\bhello\b/i.test(msg.content)) msg.say('Hi ' + msg.author.name + '! 👋');
+});
+`,py:String.raw`# Python bots run with Pyodide in a sandbox (no page access, no network).
+# Commands start with the bot's prefix, e.g. !ping
+import random
+
+@bot.command("ping")
+def ping(ctx):
+    ctx.reply("Pong!")
+
+@bot.command("roll")
+def roll(ctx):
+    sides = int(ctx.args[0]) if ctx.args and ctx.args[0].isdigit() else 6
+    ctx.reply("🎲 You rolled a " + str(random.randint(1, max(1, sides))))
+
+@bot.command("help")
+def help_(ctx):
+    ctx.say("Commands: " + bot.prefix + "ping, " + bot.prefix + "roll [sides]")
+
+@bot.on("message")
+def on_message(msg):
+    if not msg.command and "hello" in msg.content.lower():
+        msg.say("Hi " + msg.author.name + "! 👋")
+`};
+const BOT_DOC=`BOT API  (same idea in JavaScript and Python)
+
+bot.name, bot.prefix, bot.memory (a dict/object kept while the bot runs)
+bot.channels            channels this bot is in: {id, name, scope, serverId}
+bot.on('ready', fn)     bot started
+bot.on('message', fn)   every message (not from bots)
+bot.command('x', fn)    runs for <prefix>x  (JS: ctx.args is an array; Python: ctx.args is a list)
+bot.say(channel, text)  channel = an object from bot.channels, or a channel name
+bot.every(seconds, fn)  repeat (30 seconds minimum)
+
+ctx / msg:  content, author {id, login, name}, channel {id, name, scope}, command, args, rest
+            say(text)    post in the same channel
+            reply(text)  post "@login text"
+
+JavaScript: console.log writes to the log. Top-level await works.
+Python: print() writes to the log. Handlers may be "async def". Standard library only.
+
+Limits: 500 characters per message, about 10 messages per 10 seconds, 30,000 characters of code.
+Bots are run by the browser of whoever has the site open, so they answer while somebody is online.
+If a bot freezes (infinite loop) it is restarted automatically and stopped after 3 tries.`;
+
+/* ---- the sandbox: this function is stringified and run inside a Web Worker ---- */
+function botWorkerMain(){
+ const post=self.postMessage.bind(self);
+ const lock=()=>{const names=['fetch','XMLHttpRequest','WebSocket','EventSource','importScripts','Worker','SharedWorker','indexedDB','caches','BroadcastChannel','WebTransport','RTCPeerConnection'];
+  const o1=Object.getPrototypeOf(self),o2=o1&&Object.getPrototypeOf(o1);
+  for(const o of [self,o1,o2])if(o)for(const n of names){try{Object.defineProperty(o,n,{value:undefined,configurable:false,writable:false})}catch(e){}}};
+ const PY_PRELUDE=String.raw`
+import json, asyncio, inspect, host
+class D(dict):
+    def __getattr__(s, k):
+        return s.get(k)
+_cfg_ = json.loads(_cfg, object_hook=D)
+class Bot:
+    def __init__(s, c):
+        s.name = c.name; s.prefix = c.prefix; s.channels = c.channels; s.memory = {}; s._h = {}; s._c = {}
+    def on(s, ev, fn=None):
+        def reg(f):
+            s._h.setdefault(ev, []).append(f); return f
+        return reg(fn) if fn else reg
+    def command(s, name, fn=None):
+        def reg(f):
+            s._c[str(name).lower()] = f; return f
+        return reg(fn) if fn else reg
+    def say(s, channel, text):
+        c = channel
+        if not isinstance(c, dict):
+            c = next((x for x in s.channels if x.name == channel or x.id == channel), None)
+        if c:
+            host.say(c.scope, c.id, str(text))
+    def every(s, sec, fn):
+        async def loop():
+            while True:
+                await asyncio.sleep(max(30, float(sec)))
+                await _run(fn)
+        asyncio.ensure_future(loop())
+bot = Bot(_cfg_)
+async def _run(f, *a):
+    try:
+        r = f(*a)
+        if inspect.isawaitable(r):
+            await r
+    except Exception as e:
+        host.log("ERR in " + getattr(f, "__name__", "handler") + ": " + type(e).__name__ + ": " + str(e))
+class Ctx(D):
+    def say(s, t):
+        host.say(s.channel.scope, s.channel.id, str(t))
+    def reply(s, t):
+        s.say("@" + str(s.author.login) + " " + str(t))
+def _set_channels(raw):
+    bot.channels[:] = json.loads(raw, object_hook=D)
+async def _dispatch(raw):
+    ev = json.loads(raw, object_hook=D)
+    if ev.type == "message":
+        m = Ctx(ev.msg)
+        m.command = None; m.args = []; m.rest = ""
+        txt = m.content or ""
+        if txt.startswith(bot.prefix):
+            body = txt[len(bot.prefix):].strip()
+            parts = body.split()
+            if parts:
+                m.command = parts[0].lower(); m.args = parts[1:]; m.rest = body[len(parts[0]):].strip()
+        for f in list(bot._h.get("message", [])):
+            await _run(f, m)
+        if m.command and m.command in bot._c:
+            await _run(bot._c[m.command], m)
+    else:
+        for f in list(bot._h.get(ev.type, [])):
+            await _run(f, ev)
+def _load():
+    g = {"bot": bot, "__name__": "__bot__"}
+    try:
+        exec(compile(_cfg_.code, "bot.py", "exec"), g)
+    except BaseException as e:
+        host.log("ERR while loading: " + type(e).__name__ + ": " + str(e))
+_load()
+`;
+ let CFG=null,bot=null,py=null,Q=Promise.resolve();const H={},CM={};
+ const fmt=a=>a.map(x=>{try{return typeof x==='string'?x:JSON.stringify(x)}catch(e){return String(x)}}).join(' ').slice(0,500);
+ const con={};['log','info','warn','error','debug'].forEach(k=>con[k]=(...a)=>post({t:'log',text:(k==='error'?'ERR ':'')+fmt(a)}));
+ const run=async(f,...a)=>{try{await f(...a)}catch(err){post({t:'log',text:'ERR '+(err&&err.message||err)})}};
+ const say=(scope,ch,text)=>post({t:'say',scope:String(scope),channel:Number(ch),text:String(text).slice(0,500)});
+ const mkBot=()=>({name:CFG.name,prefix:CFG.prefix,channels:CFG.channels.slice(),memory:{},
+  on(ev,fn){if(typeof fn==='function')(H[ev]=H[ev]||[]).push(fn)},
+  command(n,fn){if(typeof fn==='function')CM[String(n).toLowerCase()]=fn},
+  say(channel,text){const c=channel&&typeof channel==='object'?channel:bot.channels.find(x=>x.name===channel||x.id===channel);if(c)say(c.scope,c.id,text)},
+  every(sec,fn){setInterval(()=>run(fn),Math.max(30,+sec||30)*1000)}});
+ async function loadJs(){lock();const AF=Object.getPrototypeOf(async function(){}).constructor;await new AF('bot','console',CFG.code)(bot,con)}
+ async function loadPy(){
+  importScripts('https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js');
+  py=await loadPyodide({indexURL:'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/'});
+  py.setStdout({batched:s=>post({t:'log',text:s})});py.setStderr({batched:s=>post({t:'log',text:'ERR '+s})});
+  py.registerJsModule('host',{say:(s,c,t)=>say(s,c,t),log:t=>post({t:'log',text:String(t).slice(0,500)})});
+  py.globals.set('_cfg',JSON.stringify({name:CFG.name,prefix:CFG.prefix,channels:CFG.channels,code:CFG.code}));
+  py.runPython(PY_PRELUDE);lock()}
+ async function dispatch(ev){
+  if(py){py.globals.set('_ev',JSON.stringify(ev));await py.runPythonAsync('await _dispatch(_ev)');return}
+  if(ev.type==='message'){const m=ev.msg,ch=m.channel,ctx={id:m.id,content:m.content,author:m.author,channel:ch,command:null,args:[],rest:''};
+   ctx.say=t=>say(ch.scope,ch.id,t);ctx.reply=t=>ctx.say('@'+m.author.login+' '+t);
+   const txt=String(m.content||'');
+   if(txt.startsWith(CFG.prefix)){const body=txt.slice(CFG.prefix.length).trim(),parts=body.split(/\s+/);if(parts[0]){ctx.command=parts[0].toLowerCase();ctx.args=parts.slice(1);ctx.rest=body.slice(parts[0].length).trim()}}
+   for(const f of H.message||[])await run(f,ctx);
+   if(ctx.command&&CM[ctx.command])await run(CM[ctx.command],ctx)}
+  else for(const f of H[ev.type]||[])await run(f,ev)}
+ self.onmessage=e=>{const d=e.data;
+  if(d.t==='ping')return post({t:'pong'});
+  if(d.t==='init'){CFG=d;bot=mkBot();
+   (async()=>{try{if(CFG.lang==='py')await loadPy();else await loadJs();post({t:'ready'});Q=Q.then(()=>dispatch({type:'ready'}))}catch(err){post({t:'fatal',text:String(err&&err.message||err).slice(0,500)})}})();return}
+  if(d.t==='channels'){if(py){py.globals.set('_ch',JSON.stringify(d.list));try{py.runPython('_set_channels(_ch)')}catch(e){}}else if(bot)bot.channels.splice(0,bot.channels.length,...d.list);return}
+  if(d.t==='event')Q=Q.then(()=>dispatch(d.ev)).catch(err=>post({t:'log',text:'ERR '+(err&&err.message||err)}))};
+}
+
+/* ---- runs one bot in a worker on this tab, with a watchdog for infinite loops ---- */
+class BotRunner{
+ constructor(bot,o){this.bot=bot;this.o=o;this.state='stopped';this.q=[];this.restarts=0;this.w=null;this.hb=0}
+ start(channels){this.channels=channels;this._spawn()}
+ _spawn(){this.stop(true);let url;
+  try{url=URL.createObjectURL(new Blob(['('+botWorkerMain.toString()+')()'],{type:'text/javascript'}));this.w=new Worker(url)}
+  catch(e){this.state='crashed';this.o.log('Could not start sandbox: '+e.message);return}
+  setTimeout(()=>URL.revokeObjectURL(url),15000);
+  this.state='starting';this.pong=Date.now();
+  this.w.onmessage=e=>this._msg(e.data);this.w.onerror=e=>this.o.log('Sandbox error: '+(e.message||'unknown'));
+  const b=this.bot;this.w.postMessage({t:'init',lang:b.lang,code:b.code,prefix:b.prefix,name:b.name,channels:this.channels});
+  this.hb=setInterval(()=>{if(!this.w)return;this.w.postMessage({t:'ping'});
+   if(Date.now()-this.pong>(this.state==='starting'?60000:7000))this._frozen()},2000)}
+ _frozen(){this.o.log('Bot froze (infinite loop?)');this.restarts++;
+  if(this.restarts>3){this.stop();this.state='crashed';this.o.log('Bot stopped after freezing 3 times. Fix the code and save it again.')}else this._spawn()}
+ _msg(d){
+  if(d.t==='pong')this.pong=Date.now();
+  else if(d.t==='ready'){this.state='running';this.o.log('Online ('+this.bot.lang.toUpperCase()+')');this.q.splice(0).forEach(ev=>this.w&&this.w.postMessage({t:'event',ev}))}
+  else if(d.t==='say')this.o.say(d.scope,d.channel,d.text);
+  else if(d.t==='log')this.o.log(d.text);
+  else if(d.t==='fatal'){this.o.log('Failed to start: '+d.text);this.stop();this.state='crashed'}}
+ send(ev){if(this.state==='running'&&this.w)this.w.postMessage({t:'event',ev});else if(this.state==='starting'&&this.q.length<50)this.q.push(ev)}
+ setChannels(list){this.channels=list;if(this.w&&this.state!=='stopped')this.w.postMessage({t:'channels',list})}
+ stop(keep){clearInterval(this.hb);this.hb=0;if(this.w){try{this.w.terminate()}catch(e){}this.w=null}this.q=[];if(!keep)this.state='stopped'}
+}
+
+/* ---- host engine: whoever is online and sharing a bot's channels runs it (one host per bot via bot_claim) ---- */
+const BH={runners:new Map(),logs:new Map(),gmap:new Map(),smap:new Map(),sch:new Map(),gch:new Map(),rt:null,tm:null,busy:false},sayQ=new Map();
+const botLog=(id,t)=>{const a=BH.logs.get(id)||[];a.push(new Date().toLocaleTimeString()+'  '+t);if(a.length>200)a.shift();BH.logs.set(id,a);document.dispatchEvent(new CustomEvent('botlog',{detail:id}))};
+function botSay(id,scope,ch,text){let q=sayQ.get(id);if(!q){q={a:[],t:0};sayQ.set(id,q)}if(q.a.length>=20)return;q.a.push([scope,ch,text]);
+ if(!q.t)q.t=setInterval(async()=>{const x=q.a.shift();if(!x){clearInterval(q.t);q.t=0;return}
+  const{error}=await sb.rpc('bot_say',{p_bot:id,p_scope:x[0]==='g'?'g':'s',p_channel:x[1],p_body:x[2]});if(error)botLog(id,'Could not post: '+error.message)},700)}
+function botRoute(scope,m){
+ if(m.bot_id)return;
+ const set=scope==='g'?BH.gmap.get(m.channel_id):BH.smap.get(m.server_id);if(!set)return;
+ const name=scope==='g'?BH.gch.get(m.channel_id):BH.sch.get(m.channel_id)?.name;
+ set.forEach(id=>{const r=BH.runners.get(id);if(r)r.send({type:'message',msg:{id:m.id,content:m.body||'',author:{id:m.user_id,login:m.login||'',name:m.login||''},channel:{id:m.channel_id,name:name||'',scope,serverId:scope==='s'?m.server_id:null}}})})}
+async function botHostSync(){
+ if(BH.busy)return;BH.busy=true;
+ try{
+  if(!sb||!me||!store.get('bothost',true)){botHostStop();return}
+  const[bc,sbt,gc]=await Promise.all([sb.from('bot_channels').select('bot_id,channel_id'),sb.from('server_bots').select('server_id,bot_id'),sb.from('channels').select('id,name')]);
+  const gmap=new Map(),smap=new Map(),ids=new Set(),add=(m,k,v)=>{if(!m.has(k))m.set(k,new Set());m.get(k).add(v)};
+  (bc.data||[]).forEach(r=>{add(gmap,r.channel_id,r.bot_id);ids.add(r.bot_id)});
+  (sbt.data||[]).forEach(r=>{add(smap,r.server_id,r.bot_id);ids.add(r.bot_id)});
+  BH.gch=new Map((gc.data||[]).map(c=>[c.id,c.name]));BH.sch=new Map();
+  const sids=[...smap.keys()];
+  if(sids.length)((await sb.from('server_channels').select('id,name,server_id').in('server_id',sids)).data||[]).forEach(c=>BH.sch.set(c.id,c));
+  const bots=ids.size?((await sb.from('bots').select('*').in('id',[...ids]).eq('enabled',true)).data||[]):[];
+  BH.gmap=gmap;BH.smap=smap;
+  const keep=new Set();
+  for(const b of bots){
+   const chans=[];gmap.forEach((set,cid)=>{if(set.has(b.id))chans.push({scope:'g',id:cid,name:BH.gch.get(cid)||'',serverId:null})});
+   smap.forEach((set,sid)=>{if(set.has(b.id))BH.sch.forEach(c=>{if(c.server_id===sid)chans.push({scope:'s',id:c.id,name:c.name,serverId:sid})})});
+   const{data:ok}=await sb.rpc('bot_claim',{p_bot:b.id});
+   if(!ok)continue;
+   keep.add(b.id);let r=BH.runners.get(b.id);
+   if(r&&r.bot.updated_at!==b.updated_at){r.stop();BH.runners.delete(b.id);r=null;botLog(b.id,'Code changed, restarting')}
+   if(!r){r=new BotRunner(b,{say:(s,c,t)=>botSay(b.id,s,c,t),log:t=>botLog(b.id,t)});BH.runners.set(b.id,r);r.start(chans)}else r.setChannels(chans)}
+  for(const[id,r]of[...BH.runners])if(!keep.has(id)){r.stop();BH.runners.delete(id);sb.rpc('bot_release',{p_bot:id}).then(()=>{},()=>{})}
+  if(!BH.rt&&BH.runners.size)BH.rt=sb.channel('bothost')
+   .on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},p=>botRoute('g',p.new))
+   .on('postgres_changes',{event:'INSERT',schema:'public',table:'server_messages'},p=>botRoute('s',p.new)).subscribe();
+ }catch(e){console.warn('bot host sync failed',e)}finally{BH.busy=false}}
+function botHostStop(){
+ BH.runners.forEach((r,id)=>{r.stop();if(sb&&me)sb.rpc('bot_release',{p_bot:id}).then(()=>{},()=>{})});BH.runners.clear();
+ if(BH.rt&&sb){try{sb.removeChannel(BH.rt)}catch(e){}BH.rt=null}}
+function botHostStart(){botHostStop();clearInterval(BH.tm);BH.tm=0;if(!sb||!me)return;botHostSync();BH.tm=setInterval(botHostSync,20000)}
+addEventListener('pagehide',()=>{BH.runners.forEach((r,id)=>{r.stop();try{sb?.rpc('bot_release',{p_bot:id})}catch(e){}})});
+
+/* ---- a chat line posted by a bot (global chat and servers) ---- */
+function botMsgRow(m,rf,onDel,canDel,idp){
+ const col=/^#[0-9a-fA-F]{6}$/.test(m.bot_color||'')?m.bot_color:'#6ff2c5';
+ const r=h('div',{className:'msg',id:idp+m.id},h('span',{style:'display:inline-block;min-width:1.375rem;text-align:center;margin-right:0.3125rem'},[...String(m.bot_avatar||'🤖')].slice(0,8).join('')),
+  h('b',{style:'color:'+col},m.bot_name||'Bot'),h('span',{style:'background:#5865f2;color:#fff;font-size:0.8125rem;padding:0 0.25rem;margin-left:0.25rem;border:1px solid var(--ink)'},'BOT'),': ',rf(m.body||''));
+ if(canDel&&onDel)r.append(' ',h('button',{on:{click:onDel}},'x'));
+ return r}
+
+/* ---- Bot Creator app (needs the create_bots permission) ---- */
+async function botCreator(b,w){
+ if(!sb)return noBack(b);if(!me)return needLogin(b);
+ if(!can('create_bots'))return b.append(h('div',{className:'big'},'🔒'),h('p',{},'You need a role with the “Create bots” permission to use the Bot Creator.'),h('p',{style:'opacity:.7'},'Ask an admin to give you a role that has it (Admin → Roles).'));
+ const root=h('div');b.append(root);let tester=null,onlog=null;
+ w.onclose=()=>{tester&&tester.stop();onlog&&document.removeEventListener('botlog',onlog)};
+ const hostBox=h('input',{type:'checkbox',checked:store.get('bothost',true)});
+ hostBox.onchange=()=>{store.set('bothost',hostBox.checked);botHostStart()};
+ const hostRow=h('div',{className:'row'},hostBox,' Help run bots in this browser tab (bots only answer while someone is hosting them)');
+
+ async function list(){
+  tester&&tester.stop();tester=null;if(onlog){document.removeEventListener('botlog',onlog);onlog=null}
+  const all=h('input',{type:'checkbox'}),out=h('div',{},'Loading...'),
+   mgr=can('manage_bots')?h('label',{style:'margin-left:0.5rem'},all,' show everyone\'s bots'):'';
+  const load=async()=>{
+   let q=sb.from('bots').select('*').order('created_at',{ascending:false});if(!(mgr&&all.checked))q=q.eq('owner_id',me.id);
+   const{data,error}=await q;if(error)return out.replaceChildren(error.message);
+   out.replaceChildren(...(data.length?data.map(bt=>h('div',{className:'row'},
+    h('span',{style:'margin-right:0.3125rem'},[...String(bt.avatar||'🤖')].slice(0,8).join('')),h('b',{style:'color:'+bt.color},bt.name),` [${bt.lang}] `,bt.enabled?'':'(disabled) ',bt.is_public?'🌐 ':'🔒 ',
+    BH.runners.has(bt.id)?'● running here ':'',bt.owner_id!==me.id?'by @'+bt.owner_login+' ':'',
+    h('button',{on:{click:()=>edit(bt)}},'Edit'),' ',
+    h('button',{on:{click:async()=>{if(!confirm('Delete bot '+bt.name+'? It is removed from every channel and server.'))return;const{error}=await sb.from('bots').delete().eq('id',bt.id);if(error)return toast(error.message);toast('Deleted');botHostSync();load()}}},'Delete'))):[h('p',{},'No bots yet. Press “New bot” to make one.')]))};
+  all.onchange=load;
+  root.replaceChildren(h('div',{className:'bar'},h('button',{on:{click:()=>edit(null)}},'+ New bot'),mgr),hostRow,out,
+   h('p',{style:'opacity:.75'},'Public bots can be added to any server by its admins. Private bots can only be added by you. Admins with “Manage all bots” add bots to global chat channels in Admin → Bots.'));
+  load()}
+
+ function edit(bot){
+  tester&&tester.stop();tester=null;
+  const f={
+   name:h('input',{maxLength:24,placeholder:'Bot name (2-24: letters, numbers, space _ . -)',value:bot?.name||''}),
+   avatar:h('input',{maxLength:8,placeholder:'🤖',value:bot?.avatar||'🤖',style:'width:4.5rem'}),
+   color:h('input',{type:'color',value:bot?.color||'#6ff2c5'}),
+   lang:h('select',{},h('option',{value:'js',selected:(bot?.lang||'js')==='js'},'JavaScript'),h('option',{value:'py',selected:bot?.lang==='py'},'Python')),
+   prefix:h('input',{maxLength:3,value:bot?.prefix||'!',style:'width:3.5rem',title:'Command prefix'}),
+   desc:h('input',{maxLength:200,placeholder:'What does it do?',value:bot?.description||''}),
+   enabled:h('input',{type:'checkbox',checked:bot?bot.enabled:true}),
+   pub:h('input',{type:'checkbox',checked:bot?!!bot.is_public:false}),
+   code:h('textarea',{rows:14,spellcheck:false,style:'white-space:pre;overflow:auto;tab-size:2',value:bot?.code||BOT_TPL.js})};
+  f.code.onkeydown=e=>{if(e.key==='Tab'){e.preventDefault();f.code.setRangeText('  ',f.code.selectionStart,f.code.selectionEnd,'end')}};
+  let lastLang=f.lang.value;
+  f.lang.onchange=()=>{const c=f.code.value.trim();if(!c||c===BOT_TPL[lastLang].trim()||confirm('Replace your code with the '+(f.lang.value==='py'?'Python':'JavaScript')+' starter template?'))f.code.value=BOT_TPL[f.lang.value];lastLang=f.lang.value};
+  const count=h('small',{style:'opacity:.7'});const cnt=()=>{count.textContent=f.code.value.length+' / 30000 characters';count.style.color=f.code.value.length>30000?'#c00':''};f.code.oninput=cnt;cnt();
+  const read=()=>({name:f.name.value.trim(),avatar:f.avatar.value.trim(),color:f.color.value,lang:f.lang.value,prefix:f.prefix.value,description:f.desc.value.trim(),enabled:f.enabled.checked,is_public:f.pub.checked,code:f.code.value});
+  const check=v=>!/^[A-Za-z0-9 _.-]{2,24}$/.test(v.name)?'Name: 2-24 letters, numbers, space, _ . -':[...v.avatar].length>8?'Avatar: 8 characters max (one emoji is perfect)':v.prefix.length<1||v.prefix.length>3||/\s/.test(v.prefix)?'Prefix: 1-3 characters, no spaces':v.code.length>30000?'Code is over 30000 characters':'';
+  const save=async()=>{const v=read(),bad=check(v);if(bad)return toast(bad);
+   const row={name:v.name,description:v.description||null,avatar:v.avatar||null,color:v.color,lang:v.lang,prefix:v.prefix,code:v.code,enabled:v.enabled,is_public:v.is_public};
+   const r=bot?await sb.from('bots').update(row).eq('id',bot.id).select().single():await sb.from('bots').insert({...row,owner_id:me.id,owner_login:me.login}).select().single();
+   if(r.error)return toast(r.error.code==='23505'?'That bot name is already taken':r.error.message);
+   bot=r.data;title.textContent=bot.name;toast('Saved');botHostSync()};
+  /* test console: runs the code in a private sandbox here and shows replies locally, nothing is posted */
+  const tin=h('input',{placeholder:'Type a message to test, e.g. !ping',style:'flex:1'}),tout=h('div',{style:'height:7rem;overflow:auto;background:#1a1033;color:#6ff2c5;font:0.8125rem monospace;padding:0.25rem;white-space:pre-wrap;user-select:text'});
+  const tlog=t=>{tout.append(h('div',{},t));tout.scrollTop=1e9};
+  const run=()=>{const v=read(),bad=check(v);if(bad)return toast(bad);tester&&tester.stop();tout.replaceChildren();
+   tlog('Starting '+(v.lang==='py'?'Python (first start downloads Pyodide, ~10 MB)':'JavaScript')+'...');
+   tester=new BotRunner({...v,id:'test'},{say:(s,c,t)=>tlog('🤖 '+v.name+': '+t),log:t=>tlog('· '+t)});tester.start([{scope:'t',id:0,name:'test',serverId:null}])};
+  const sendT=()=>{const t=tin.value.trim();if(!t)return;if(!tester)return toast('Press ▶ Run test first');tin.value='';tlog('👤 you: '+t);
+   tester.send({type:'message',msg:{id:Date.now(),content:t,author:{id:me.id,login:me.login,name:me.login},channel:{id:0,name:'test',scope:'t',serverId:null}}})};
+  tin.onkeydown=e=>{if(e.key==='Enter')sendT()};
+  const live=h('div',{style:'max-height:6rem;overflow:auto;font:0.8125rem monospace;white-space:pre-wrap;user-select:text;background:#fff;border:2px solid var(--lo);padding:0.25rem'});
+  const drawLive=()=>{live.replaceChildren(...((bot&&BH.logs.get(bot.id))||['(nothing yet - appears while this tab is hosting the bot)']).slice(-40).map(x=>h('div',{},x)))};
+  onlog=e=>{if(bot&&e.detail===bot.id)drawLive()};document.addEventListener('botlog',onlog);drawLive();
+  const title=h('b',{},bot?bot.name:'New bot');
+  root.replaceChildren(
+   h('div',{className:'bar'},h('button',{on:{click:list}},'← Back'),title),
+   h('div',{className:'bar'},f.name,f.avatar,f.color),
+   h('div',{className:'bar'},f.lang,h('label',{},'prefix ',f.prefix),f.desc),
+   h('div',{},h('label',{},f.enabled,' Enabled'),'  ',h('label',{},f.pub,' Public (any server admin can add it)')),
+   f.code,count,
+   h('div',{className:'bar',style:'margin-top:0.25rem'},h('button',{on:{click:save}},'💾 Save'),h('button',{on:{click:run}},'▶ Run test'),h('button',{on:{click:()=>{tester&&tester.stop();tout.replaceChildren()}}},'■ Stop'),
+    bot?h('button',{on:{click:async()=>{if(!confirm('Delete '+bot.name+'?'))return;const{error}=await sb.from('bots').delete().eq('id',bot.id);if(error)return toast(error.message);toast('Deleted');botHostSync();list()}}},'🗑 Delete'):''),
+   h('b',{},'Test console'),tout,h('div',{className:'bar',style:'margin-top:0.25rem'},tin,h('button',{on:{click:sendT}},'Send')),
+   h('b',{},'Live log (bot running in this tab)'),live,
+   h('details',{style:'margin-top:0.375rem'},h('summary',{},'📖 Bot API'),h('pre',{style:'white-space:pre-wrap;user-select:text;font-size:0.8125rem'},BOT_DOC)))}
+ list()}
+
+/* ---- Admin > Bots tab: manage every bot and add bots to global chat channels ---- */
+async function adminBots(pane,log,refresh){
+ const[bs,cs,bc]=await Promise.all([sb.from('bots').select('id,name,avatar,color,lang,owner_login,enabled,is_public').order('name'),sb.from('channels').select('id,name').order('id'),sb.from('bot_channels').select('bot_id,channel_id')]);
+ const bots=bs.data||[],chs=cs.data||[],have=new Set((bc.data||[]).map(r=>r.bot_id+':'+r.channel_id));
+ pane.replaceChildren(h('p',{},'Tick a channel to add a bot to global chat. Bots only answer while someone with the site open is hosting them.'),
+  ...(bots.length?bots.map(bt=>{
+   const en=h('input',{type:'checkbox',checked:bt.enabled});
+   en.onchange=async()=>{const{error}=await sb.from('bots').update({enabled:en.checked}).eq('id',bt.id);if(error){en.checked=!en.checked;return toast(error.message)}log(`bot ${bt.name} ${en.checked?'enabled':'disabled'}`);toast('Saved')};
+   const boxes=chs.map(c=>{const k=bt.id+':'+c.id,cb=h('input',{type:'checkbox',checked:have.has(k)});
+    cb.onchange=async()=>{const r=cb.checked?await sb.from('bot_channels').insert({bot_id:bt.id,channel_id:c.id,added_by:me.id}):await sb.from('bot_channels').delete().eq('bot_id',bt.id).eq('channel_id',c.id);
+     if(r.error){cb.checked=!cb.checked;return toast(r.error.message)}log(`bot ${bt.name} ${cb.checked?'added to':'removed from'} #${c.name}`);toast('Saved');botHostSync()};
+    return h('label',{style:'margin-right:0.625rem;white-space:nowrap'},cb,' #'+c.name)});
+   return h('div',{className:'row'},h('span',{style:'margin-right:0.3125rem'},[...String(bt.avatar||'🤖')].slice(0,8).join('')),h('b',{style:'color:'+bt.color},bt.name),` [${bt.lang}] by @${bt.owner_login} ${bt.is_public?'🌐':'🔒'} `,h('label',{},en,' enabled'),' ',
+    h('button',{on:{click:async()=>{if(!confirm('Delete bot '+bt.name+'?'))return;const{error}=await sb.from('bots').delete().eq('id',bt.id);if(error)return toast(error.message);log('bot deleted: '+bt.name);refresh()}}},'Delete'),
+    h('div',{},'Global channels: ',...boxes))}):[h('p',{},'No bots have been made yet.')]))}
+
+/* ---- Servers app ---- */
+const srvIcon=(u,name)=>CHATIMG.test(u||'')?h('img',{src:u,style:'width:100%;height:100%;object-fit:cover'}):h('span',{},String(u||'').trim().slice(0,3)||String(name||'?').slice(0,2).toUpperCase());
+const rbadge=r=>h('span',{style:`background:${r.color};color:${ink(r.color)};font-size:0.875rem;padding:0 0.3125rem;margin-left:0.25rem;border:1px solid var(--ink)`},r.name);
+const copyTxt=async t=>{try{await navigator.clipboard.writeText(t);return true}catch(e){prompt('Copy this:',t);return false}};
+const invLink=c=>location.origin+location.pathname+'?invite='+c;
+function srvInviteCheck(){
+ try{const c=new URLSearchParams(location.search).get('invite');if(c){sessionStorage.setItem('pinv',c.toLowerCase());history.replaceState(null,'',location.pathname+location.hash)}}catch(e){}
+ try{if(me&&sessionStorage.getItem('pinv')){if(wins.servers)document.dispatchEvent(new Event('srv-invite'));else openApp('servers')}}catch(e){}}
+
+async function serversApp(b,w){
+ if(!sb)return noBack(b);if(!me)return needLogin(b);
+ await loadE();
+ b.style.cssText+=';padding:0;overflow:hidden';
+ const SP={};let servers=[],D=null,perms=new Set(),curCh=null,rt=null,sideOn=innerWidth>600,pickBox=null;
+ const root=h('div',{style:'display:flex;height:100%;min-height:0;position:relative'}),
+  rail=h('div',{style:'flex:0 0 3.25rem;overflow-y:auto;background:var(--lo);padding:0.25rem;display:flex;flex-direction:column;gap:0.25rem;align-items:center'}),
+  side=h('div',{style:'flex:0 0 9.5rem;overflow-y:auto;background:#d9d3f0;border-right:2px solid var(--lo);display:flex;flex-direction:column'}),
+  main=h('div',{style:'flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;padding:0.25rem'});
+ root.append(rail,side,main);b.append(root);
+ const foot=h('label',{style:'font-size:0.8125rem;padding:0.125rem 0.25rem;display:block'},(()=>{const c=h('input',{type:'checkbox',checked:store.get('bothost',true)});c.onchange=()=>{store.set('bothost',c.checked);botHostStart()};return c})(),' 🤖 help run bots');
+ w.onclose=()=>{if(rt)sb.removeChannel(rt);document.removeEventListener('srv-invite',onInv)};
+ const onInv=()=>joinView(sessionStorage.getItem('pinv')||'');document.addEventListener('srv-invite',onInv);
+
+ const prof=async ids=>{const need=[...new Set(ids.filter(i=>i&&!SP[i]))];if(!need.length)return;((await sb.from('profiles').select(PCOLS).in('id',need)).data||[]).forEach(p=>SP[p.id]=p)};
+ const rank=uid=>D.srv.owner_id===uid?-1:Math.min(1000,...D.roles.filter(r=>r.is_default||(D.mroles[uid]||[]).includes(r.id)).map(r=>r.pos));
+ const calc=()=>{if(D.srv.owner_id===me.id)return new Set(Object.keys(SRV_PERMS));const mine=new Set(D.mroles[me.id]||[]),s=new Set();D.roles.filter(r=>r.is_default||mine.has(r.id)).forEach(r=>(r.perms||[]).forEach(p=>s.add(p)));return s};
+ const roleCol=uid=>{const ids=new Set(D.mroles[uid]||[]),r=D.roles.filter(x=>!x.is_default&&ids.has(x.id)).sort((a,c)=>a.pos-c.pos)[0];return r?r.color:'var(--ink)'};
+ const EM=()=>Object.fromEntries((D?.emojis||[]).map(e=>[e.name,e.url]));
+ const srich=t=>{const em=EM();return String(t||'').split(/(:[a-z0-9_]{2,24}:)/).map(x=>{const m=/^:(.+):$/.exec(x),u=m&&(em[m[1]]||E[m[1]]);return u&&/^https:\/\//.test(u)?h('img',{src:u,title:x,style:'height:1.3em;vertical-align:middle'}):x})};
+
+ /* ---------- data ---------- */
+ async function loadList(){const{data,error}=await sb.from('servers').select('*').order('created_at');if(error)toast(error.message);servers=data||[];drawRail()}
+ function drawRail(){
+  rail.replaceChildren(...servers.map(s=>h('button',{title:s.name,style:`width:2.5rem;height:2.5rem;padding:0;overflow:hidden;flex:0 0 auto;${D&&D.srv.id===s.id?'outline:2px solid var(--pink)':''}`,on:{click:()=>openSrv(s.id)}},srvIcon(s.icon,s.name))),
+   h('button',{title:'Create or join a server',style:'width:2.5rem;height:2.5rem;padding:0;flex:0 0 auto;font-size:1.5rem',on:{click:()=>joinView('')}},'+'),foot)}
+ async function openSrv(id){
+  if(rt){sb.removeChannel(rt);rt=null}
+  const srv=servers.find(s=>s.id===id);if(!srv)return;
+  const q=t=>sb.from(t).select('*').eq('server_id',id);
+  const[ch,ro,me2,mr,em,st,sbt]=await Promise.all([q('server_channels').order('pos').order('id'),q('server_roles').order('pos'),q('server_members'),q('server_member_roles'),q('server_emojis').order('name'),q('server_stickers').order('name'),q('server_bots')]);
+  D={srv,chans:ch.data||[],roles:ro.data||[],members:me2.data||[],mroles:{},emojis:em.data||[],stickers:st.data||[],bots:sbt.data||[]};
+  (mr.data||[]).forEach(r=>(D.mroles[r.user_id]??=[]).push(r.role_id));
+  await prof(D.members.map(m=>m.user_id));
+  perms=calc();store.set('srv_cur',id);
+  const last=store.get('srv_ch_'+id,null);curCh=(D.chans.find(c=>c.id===last)||D.chans[0])?.id||null;
+  rt=sb.channel('srv-'+id)
+   .on('postgres_changes',{event:'INSERT',schema:'public',table:'server_messages',filter:'server_id=eq.'+id},p=>{if(p.new.channel_id===curCh)addMsg(p.new)})
+   .on('postgres_changes',{event:'DELETE',schema:'public',table:'server_messages'},p=>document.getElementById('sm'+p.old.id)?.remove())
+   .on('postgres_changes',{event:'*',schema:'public',table:'server_channels'},p=>{if((p.new&&p.new.server_id===id)||(p.old&&D&&D.chans.some(c=>c.id===p.old.id)))refreshChans()})
+   .on('postgres_changes',{event:'*',schema:'public',table:'server_members'},p=>{if((p.new&&p.new.server_id===id)||(p.old&&p.old.server_id===id))refreshMembers()}).subscribe();
+  drawRail();chatView()}
+ async function refreshChans(){if(!D)return;D.chans=(await sb.from('server_channels').select('*').eq('server_id',D.srv.id).order('pos').order('id')).data||[];if(!D.chans.find(c=>c.id===curCh))curCh=D.chans[0]?.id||null;if(main.dataset.v==='chat')chatView()}
+ async function refreshMembers(){if(!D)return;const id=D.srv.id,gone=async()=>{toast('You are no longer in that server');if(rt){sb.removeChannel(rt);rt=null}D=null;await loadList();noServer()};
+  const[a,c]=await Promise.all([sb.from('server_members').select('*').eq('server_id',id),sb.from('server_member_roles').select('*').eq('server_id',id)]);
+  if(!(a.data||[]).some(m=>m.user_id===me.id)&&D.srv.owner_id!==me.id)return gone();
+  D.members=a.data||[];D.mroles={};(c.data||[]).forEach(r=>(D.mroles[r.user_id]??=[]).push(r.role_id));await prof(D.members.map(m=>m.user_id));perms=calc();if(main.dataset.v==='members')settings('Members')}
+ function noServer(){side.replaceChildren();main.dataset.v='none';main.replaceChildren(h('p',{},servers.length?'Pick a server on the left.':'You are not in any servers yet.'),h('button',{on:{click:()=>joinView('')}},'Create or join a server'))}
+
+ /* ---------- create / join ---------- */
+ function joinView(pre){
+  main.dataset.v='join';side.replaceChildren();if(pre)try{sessionStorage.removeItem('pinv')}catch(e){}
+  const code=h('input',{placeholder:'Invite code or link',value:pre||'',style:'flex:1'}),nm=h('input',{placeholder:'Server name (2-32)',maxLength:32,style:'flex:1'}),ic=h('input',{placeholder:'Icon (emoji)',maxLength:4,style:'width:6rem'});
+  const go=async p=>{const{data,error}=await p;if(error)return toast(error.message);await loadList();openSrv(data)};
+  main.replaceChildren(pre?h('div',{className:'row'},'📨 You were invited. Check the code and press Join.'):'',
+   h('b',{},'Join a server'),h('div',{className:'bar'},code,h('button',{on:{click:()=>{const c=(code.value.match(/invite=([a-z0-9]+)/i)?.[1]||code.value).trim().toLowerCase();if(!c)return toast('Paste an invite code');go(sb.rpc('join_server',{p_code:c}))}}},'Join')),
+   h('hr'),h('b',{},'Create your own server'),h('div',{className:'bar'},nm,ic,h('button',{on:{click:()=>{const n=nm.value.trim();if(n.length<2)return toast('Name needs 2 to 32 characters');go(sb.rpc('create_server',{p_name:n,p_icon:ic.value.trim()||null}))}}},'Create')),
+   h('small',{},'You can own up to 8 servers. New servers start with a #general channel and an "everyone" role.'))}
+
+ /* ---------- chat ---------- */
+ let msgs=null;
+ const delMsg=(m,r)=>async()=>{const{error}=await sb.from('server_messages').delete().eq('id',m.id);if(error)return toast(error.message);r.remove()};
+ function msgRow(m){
+  const canDel=!!me&&(m.user_id===me.id||perms.has('manage_messages'));let r;
+  if(m.bot_id)return r=botMsgRow(m,srich,delMsg(m,{remove:()=>r.remove()}),canDel,'sm');
+  const p=SP[m.user_id]||{login:m.login||'?'},a=av(p);
+  r=h('div',{className:'msg',id:'sm'+m.id},a?h('img',{src:a,width:22,height:22,style:'vertical-align:middle;margin-right:0.3125rem;cursor:pointer;border:1px solid var(--ink);object-fit:cover',on:{click:()=>SP[m.user_id]&&openProfile(p)}}):'',
+   h('b',{style:'color:'+(D.srv.owner_id===m.user_id?'var(--pink)':roleCol(m.user_id))+';cursor:pointer',on:{click:()=>SP[m.user_id]&&openProfile(p)}},(D.srv.owner_id===m.user_id?'👑 ':'')+dn(p)),m.body?': ':'',m.body?srich(m.body):'');
+  if(m.image_url&&CHATIMG.test(m.image_url))r.append(h('div',{},h('img',{src:m.image_url,loading:'lazy',style:'max-width:100%;max-height:13.75rem;cursor:zoom-in',on:{click:()=>window.open(m.image_url,'_blank','noopener')}})));
+  if(m.sticker_url&&CHATIMG.test(m.sticker_url))r.append(h('div',{},h('img',{src:m.sticker_url,title:m.sticker_name||'',loading:'lazy',style:'height:7rem;max-width:100%'})));
+  if(canDel)r.append(' ',h('button',{on:{click:delMsg(m,r)}},'x'));
+  return r}
+ async function addMsg(m){await prof([m.user_id]);if(!msgs||m.channel_id!==curCh)return;msgs.append(msgRow(m));msgs.scrollTop=1e9}
+ function drawSide(){
+  const btn=(t,f,on)=>h('button',{style:'display:block;width:100%;text-align:left;border:0;background:'+(on?'var(--pink)':'none')+';color:'+(on?'#fff':'inherit')+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis',on:{click:f}},t);
+  side.style.display=sideOn?'flex':'none';
+  side.replaceChildren(h('div',{style:'padding:0.25rem;border-bottom:2px solid var(--lo)'},h('b',{},D.srv.name),h('div',{className:'bar',style:'margin:0.25rem 0 0'},
+    h('button',{title:'Server settings',on:{click:()=>settings('Overview')}},'⚙'),
+    perms.has('create_invites')?h('button',{title:'Quick invite (7 days)',on:{click:async()=>{const{data,error}=await sb.rpc('create_invite',{p_server:D.srv.id,p_max:null,p_hours:168});if(error)return toast(error.message);await copyTxt(invLink(data));toast('Invite link copied. Code: '+data)}}},'📨'):'',
+    perms.has('manage_channels')?h('button',{title:'New channel',on:{click:async()=>{const n=(prompt('Channel name (a-z, 0-9, -)')||'').trim().toLowerCase();if(!n)return;if(!/^[a-z0-9-]{1,24}$/.test(n))return toast('Use a-z, 0-9 and - (24 max)');const{error}=await sb.from('server_channels').insert({server_id:D.srv.id,name:n});if(error)return toast(error.message);refreshChans()}}},'+'):'')),
+   ...D.chans.map(c=>btn('# '+c.name,()=>{curCh=c.id;store.set('srv_ch_'+D.srv.id,c.id);if(innerWidth<=600)sideOn=false;chatView()},c.id===curCh)))}
+ async function chatView(){
+  main.dataset.v='chat';drawSide();
+  const ch=D.chans.find(c=>c.id===curCh);
+  const menuBtn=h('button',{title:'Show or hide channels',on:{click:()=>{sideOn=!sideOn;side.style.display=sideOn?'flex':'none'}}},'☰');
+  if(!ch)return main.replaceChildren(h('div',{className:'bar'},menuBtn),h('p',{},'This server has no channels.'),perms.has('manage_channels')?h('p',{},'Press + above to make one.'):'');
+  msgs=h('div',{style:'flex:1;min-height:0;overflow:auto;user-select:text'});
+  const inp=h('input',{maxLength:500,style:'flex:1'}),can2=perms.has('send_messages');inp.disabled=!can2;inp.placeholder=can2?'Message #'+ch.name:'You cannot send messages here';
+  const send=async(x={})=>{if(!perms.has('send_messages'))return toast('You cannot send messages in this server');const body=inp.value.trim();if(!body&&!x.image_url&&!x.sticker_url)return;inp.value='';
+   const{error}=await sb.from('server_messages').insert({server_id:D.srv.id,channel_id:curCh,user_id:me.id,login:me.login,body,...x});if(error)toast(error.message)};
+  inp.onkeydown=e=>{if(e.key==='Enter')send()};
+  const eBox=h('div',{style:'display:none;flex-wrap:wrap;gap:2px;max-height:6.875rem;overflow:auto;background:#fff;border:2px solid var(--lo);padding:0.25rem'}),
+   sBox=h('div',{style:'display:none;flex-wrap:wrap;gap:0.25rem;max-height:8rem;overflow:auto;background:#fff;border:2px solid var(--lo);padding:0.25rem'});
+  const em=EM();
+  eBox.replaceChildren(...EMO.map(x=>h('button',{style:'border:0;background:none;font-size:1.25rem;padding:0 0.1875rem',on:{click:()=>{inp.value+=x;inp.focus()}}},x)),
+   ...D.emojis.map(e=>h('button',{title:':'+e.name+':  (this server)',style:'border:0;background:none;padding:0 0.1875rem',on:{click:()=>{inp.value+=`:${e.name}:`;inp.focus()}}},h('img',{src:e.url,style:'height:1.375rem'}))),
+   ...Object.entries(E).filter(([n])=>!em[n]).map(([n,u])=>h('button',{title:':'+n+':',style:'border:0;background:none;padding:0 0.1875rem',on:{click:()=>{inp.value+=`:${n}:`;inp.focus()}}},h('img',{src:u,style:'height:1.375rem'}))));
+  sBox.replaceChildren(...(D.stickers.length?D.stickers.map(s=>h('button',{title:s.name,style:'border:0;background:none;padding:0',on:{click:()=>{sBox.style.display='none';send({sticker_name:s.name,sticker_url:s.url})}}},h('img',{src:s.url,style:'height:4.5rem'}))):['No stickers yet. Someone with “Manage emojis and stickers” can add them in ⚙ Server settings.']));
+  const tog=bx=>()=>{const o=bx.style.display==='none';eBox.style.display='none';sBox.style.display='none';if(o)bx.style.display='flex'};
+  main.replaceChildren(h('div',{className:'bar',style:'align-items:center'},menuBtn,h('b',{},'# '+ch.name),h('small',{style:'opacity:.7'},ch.topic||'')),msgs,eBox,sBox,
+   h('div',{className:'bar',style:'margin:0.25rem 0 0'},h('button',{title:'Emoji',on:{click:tog(eBox)}},'😀'),h('button',{title:'Stickers',on:{click:tog(sBox)}},'🏷'),
+    perms.has('attach_images')?imgBtn(async(x,ext)=>{const path=`${me.id}/${Date.now()}.${ext}`,{error}=await sb.storage.from('chat-images').upload(path,x,{contentType:x.type});if(error)return toast(error.message);send({image_url:sb.storage.from('chat-images').getPublicUrl(path).data.publicUrl})}):'',inp));
+  const{data}=await sb.from('server_messages').select('*').eq('channel_id',curCh).order('created_at',{ascending:false}).limit(60);
+  const rows=(data||[]).reverse();await prof(rows.map(m=>m.user_id));if(curCh!==ch.id||!msgs.isConnected)return;
+  rows.forEach(m=>msgs.append(msgRow(m)));msgs.scrollTop=1e9}
+
+ /* ---------- settings ---------- */
+ function settings(tab){
+  main.dataset.v=tab==='Members'?'members':'settings';
+  const myRank=rank(me.id),owner=D.srv.owner_id===me.id,pane=h('div',{style:'flex:1;overflow:auto;min-height:0'});
+  const tabs=[['Overview',1],['Channels',perms.has('manage_channels')],['Roles',perms.has('manage_roles')],['Members',1],['Invites',perms.has('create_invites')||perms.has('manage_server')],['Emojis',perms.has('manage_emojis')],['Bots',1],['Bans',perms.has('ban_members')]].filter(t=>t[1]);
+  main.replaceChildren(h('div',{className:'bar'},h('button',{on:{click:chatView}},'← Back to chat'),...tabs.map(([t])=>h('button',{style:t===tab?'border-color:var(--lo) var(--hi) var(--hi) var(--lo)':'',on:{click:()=>settings(t)}},t))),pane);
+  const T={
+  Overview:()=>{
+   const nm=h('input',{maxLength:32,value:D.srv.name,disabled:!perms.has('manage_server'),style:'width:100%'}),ds=h('textarea',{rows:3,maxLength:200,value:D.srv.description||'',disabled:!perms.has('manage_server'),placeholder:'About this server'}),
+    ic=h('input',{maxLength:300,value:CHATIMG.test(D.srv.icon||'')?'':(D.srv.icon||''),placeholder:'Emoji, or upload an image',disabled:!perms.has('manage_server'),style:'width:8rem'}),f=h('input',{type:'file',accept:'image/png,image/jpeg,image/gif,image/webp',style:'display:none'});
+   const upd=async patch=>{const{error}=await sb.from('servers').update(patch).eq('id',D.srv.id);if(error)return toast(error.message);Object.assign(D.srv,patch);const i=servers.findIndex(s=>s.id===D.srv.id);if(i>-1)Object.assign(servers[i],patch);drawRail();toast('Saved')};
+   f.onchange=async()=>{const x=f.files[0];f.value='';if(!x)return;if(!IMGEXT[x.type]||x.size>512e3)return toast('PNG, JPG, GIF or WebP under 512 KB');const path=`${me.id}/srv-${Date.now()}.${IMGEXT[x.type]}`,{error}=await sb.storage.from('chat-images').upload(path,x,{contentType:x.type});if(error)return toast(error.message);upd({icon:sb.storage.from('chat-images').getPublicUrl(path).data.publicUrl})};
+   pane.replaceChildren(h('div',{},'Name'),nm,h('div',{},'Description'),ds,h('div',{},'Icon'),h('div',{className:'bar'},ic,perms.has('manage_server')?h('button',{on:{click:()=>f.click()}},'Upload image'):'',f),
+    perms.has('manage_server')?h('div',{className:'bar'},h('button',{on:{click:()=>{if(nm.value.trim().length<2)return toast('Name needs 2 to 32 characters');upd({name:nm.value.trim(),description:ds.value.trim()||null,icon:ic.value.trim()||(CHATIMG.test(D.srv.icon||'')?D.srv.icon:null)})}}},'Save')):'',
+    h('hr'),owner?h('button',{on:{click:async()=>{if(prompt('Type the server name to delete it forever:')!==D.srv.name)return toast('Name did not match');const{error}=await sb.from('servers').delete().eq('id',D.srv.id);if(error)return toast(error.message);if(rt){sb.removeChannel(rt);rt=null}D=null;await loadList();noServer()}}},'🗑 Delete server'):
+     h('button',{on:{click:async()=>{if(!confirm('Leave '+D.srv.name+'?'))return;const{error}=await sb.rpc('leave_server',{p_server:D.srv.id});if(error)return toast(error.message);if(rt){sb.removeChannel(rt);rt=null}D=null;await loadList();noServer()}}},'Leave server'),
+    h('p',{style:'opacity:.7'},'Owner: @'+(SP[D.srv.owner_id]?.login||'?')+'  |  Created '+new Date(D.srv.created_at).toLocaleDateString()+'  |  Your perms: '+(owner?'all (owner)':[...perms].join(', ')||'none')))},
+  Channels:()=>{
+   pane.replaceChildren(...D.chans.map(c=>{const nm=h('input',{value:c.name,maxLength:24,style:'width:8rem'}),tp=h('input',{value:c.topic||'',maxLength:120,placeholder:'Topic',style:'flex:1'});
+    return h('div',{className:'row'},h('div',{className:'bar'},'#',nm,tp),h('div',{className:'bar'},
+     h('button',{on:{click:async()=>{const n=nm.value.trim().toLowerCase();if(!/^[a-z0-9-]{1,24}$/.test(n))return toast('Use a-z, 0-9 and - (24 max)');const{error}=await sb.from('server_channels').update({name:n,topic:tp.value.trim()||null}).eq('id',c.id);toast(error?error.message:'Saved');if(!error)refreshChans()}}},'Save'),
+     h('button',{on:{click:async()=>{if(D.chans.length<2)return toast('A server needs at least one channel');if(!confirm('Delete #'+c.name+' and its messages?'))return;const{error}=await sb.from('server_channels').delete().eq('id',c.id);if(error)return toast(error.message);await refreshChans();T.Channels()}}},'Delete')))}),
+    h('p',{},'Use the + next to the server name to add a channel (30 max).'))},
+  Roles:()=>{
+   const nm=h('input',{placeholder:'role name',maxLength:20}),col=h('input',{type:'color',value:'#c9c2e8'}),pos=h('input',{type:'number',value:owner?50:myRank+10,style:'width:5rem',title:'Rank: lower = more powerful'}),
+    cb=Object.keys(SRV_PERMS).map(k=>[k,h('input',{type:'checkbox',disabled:!perms.has(k)})]);let editing=null;
+   const fill=r=>{editing=r;nm.value=r?r.name:'';nm.disabled=!!r?.is_default;col.value=r?r.color:'#c9c2e8';pos.value=r?r.pos:(owner?50:myRank+10);pos.disabled=!!r?.is_default;cb.forEach(([k,c])=>c.checked=!!r&&(r.perms||[]).includes(k))};
+   const save=async()=>{const perms2=cb.filter(x=>x[1].checked).map(x=>x[0]);let e;
+    if(editing){const patch={color:col.value,perms:perms2};if(!editing.is_default){patch.name=nm.value.trim();patch.pos=+pos.value}e=(await sb.from('server_roles').update(patch).eq('id',editing.id)).error}
+    else{const n=nm.value.trim();if(n.length<2)return toast('Name needs 2 to 20 characters');if(!Number.isInteger(+pos.value))return toast('Rank must be a whole number');e=(await sb.from('server_roles').insert({server_id:D.srv.id,name:n,color:col.value,pos:+pos.value,perms:perms2})).error}
+    if(e)return toast(e.message);toast('Saved');await reloadRoles();T.Roles()};
+   const rows=[...D.roles].sort((a,c)=>a.pos-c.pos).map(r=>{const ok=owner||r.is_default||r.pos>myRank;return h('div',{className:'row'},rbadge(r),` rank ${r.is_default?'(everyone)':r.pos}, ${(r.perms||[]).length} perms `,ok?h('button',{on:{click:()=>fill(r)}},'Edit'):'',ok&&!r.is_default?h('button',{on:{click:async()=>{if(!confirm('Delete role '+r.name+'?'))return;const{error}=await sb.from('server_roles').delete().eq('id',r.id);if(error)return toast(error.message);await reloadRoles();T.Roles()}}},'Delete'):'')});
+   pane.replaceChildren(...rows,h('hr'),h('b',{},editing?'Edit role':'Create a role'),h('div',{className:'bar'},nm,col,pos,h('button',{on:{click:()=>fill(null)}},'New')),...cb.map(([k,c])=>h('div',{},c,' '+SRV_PERMS[k])),h('div',{className:'bar'},h('button',{on:{click:save}},'Save role')),
+    h('p',{style:'opacity:.7'},'You can only edit roles ranked below you and only give permissions you have yourself. Everyone gets the "everyone" role automatically.'))},
+  Members:()=>{
+   const ms=[...D.members].sort((a,c)=>rank(a.user_id)-rank(c.user_id));
+   pane.replaceChildren(h('b',{},D.members.length+' members'),...ms.map(m=>{const p=SP[m.user_id]||{login:'?'},mine=m.user_id===me.id,lower=rank(m.user_id)>myRank,rs=D.roles.filter(r=>!r.is_default&&(D.mroles[m.user_id]||[]).includes(r.id));let ctl='';
+    if(!mine&&lower&&perms.has('manage_roles')){const avail=D.roles.filter(r=>!r.is_default&&r.pos>myRank),boxes=avail.map(r=>[r,h('input',{type:'checkbox',checked:rs.some(x=>x.id===r.id)})]);
+     if(avail.length)ctl=h('div',{},...boxes.map(([r,c])=>h('label',{style:'margin-right:0.5rem;white-space:nowrap'},c,' '+r.name)),h('button',{on:{click:async()=>{const keepHigher=rs.filter(r=>!avail.some(a=>a.id===r.id)).map(r=>r.id);const{error}=await sb.rpc('srv_set_member_roles',{p_server:D.srv.id,p_target:m.user_id,p_roles:[...keepHigher,...boxes.filter(x=>x[1].checked).map(x=>x[0].id)]});if(error)return toast(error.message);toast('Roles updated');refreshMembers()}}},'Save roles'))}
+    const acts=[];
+    if(!mine&&lower&&perms.has('kick_members'))acts.push(h('button',{on:{click:async()=>{if(!confirm('Kick '+dn(p)+'?'))return;const{error}=await sb.rpc('srv_kick',{p_server:D.srv.id,p_target:m.user_id});toast(error?error.message:'Kicked');if(!error)refreshMembers()}}},'Kick'));
+    if(!mine&&lower&&perms.has('ban_members'))acts.push(h('button',{on:{click:async()=>{if(!confirm('Ban '+dn(p)+'?'))return;const{error}=await sb.rpc('srv_ban',{p_server:D.srv.id,p_target:m.user_id,p_ban:true});toast(error?error.message:'Banned');if(!error)refreshMembers()}}},'Ban'));
+    return h('div',{className:'row'},h('b',{style:'color:'+(D.srv.owner_id===m.user_id?'var(--pink)':roleCol(m.user_id))},(D.srv.owner_id===m.user_id?'👑 ':'')+dn(p)),' @'+(p.login||'?'),...rs.map(rbadge),' ',...acts,ctl)}))},
+  Invites:async()=>{
+   const mx=h('input',{type:'number',min:0,value:0,style:'width:4.5rem',title:'0 = unlimited'}),hr=h('input',{type:'number',min:0,value:24,style:'width:4.5rem',title:'0 = never expires'}),l=h('div');
+   const draw=async()=>{const{data}=await sb.from('server_invites').select('*').eq('server_id',D.srv.id).order('created_at',{ascending:false});
+    l.replaceChildren(...((data||[]).length?data.map(i=>h('div',{className:'row'},h('b',{style:'user-select:text'},i.code),` ${i.uses}${i.max_uses?'/'+i.max_uses:''} uses, `+(i.expires_at?'expires '+new Date(i.expires_at).toLocaleString():'never expires')+' ',
+     h('button',{on:{click:async()=>{await copyTxt(i.code);toast('Code copied')}}},'Copy code'),h('button',{on:{click:async()=>{await copyTxt(invLink(i.code));toast('Link copied')}}},'Copy link'),
+     h('button',{on:{click:async()=>{const{error}=await sb.from('server_invites').delete().eq('code',i.code);toast(error?error.message:'Revoked');draw()}}},'Revoke'))):[h('p',{},'No invites yet.')]))};
+   pane.replaceChildren(h('div',{className:'bar',style:'align-items:center'},'Max uses',mx,'Hours',hr,h('button',{on:{click:async()=>{if(!perms.has('create_invites'))return toast('You cannot create invites here');const{data,error}=await sb.rpc('create_invite',{p_server:D.srv.id,p_max:+mx.value||null,p_hours:+hr.value||null});if(error)return toast(error.message);await copyTxt(invLink(data));toast('Created '+data+' (link copied)');draw()}}},'Create invite')),
+    h('small',{},'People paste the code in Servers → + → Join, or open the link. You see invites you made; with “Edit server” you see all of them.'),l);draw()},
+  Emojis:()=>{
+   const nm=h('input',{placeholder:'name (a-z 0-9 _)',maxLength:24}),f=h('input',{type:'file',accept:'image/png,image/jpeg,image/gif,image/webp'}),kind=h('select',{},h('option',{value:'emoji'},'Emoji (256 KB max)'),h('option',{value:'sticker'},'Sticker (512 KB max)'));
+   const up=async()=>{const n=nm.value.trim().toLowerCase(),x=f.files[0],k=kind.value;if(!/^[a-z0-9_]{2,24}$/.test(n)||!x)return toast('Pick a name (a-z, 0-9, _) and an image');if(!IMGEXT[x.type]||x.size>(k==='emoji'?256e3:512e3))return toast('PNG, JPG, GIF or WebP, '+(k==='emoji'?'256':'512')+' KB max');
+    const path=`${me.id}/${k}-${Date.now()}.${IMGEXT[x.type]}`;let r=await sb.storage.from('chat-images').upload(path,x,{contentType:x.type});if(r.error)return toast(r.error.message);
+    r=await sb.from(k==='emoji'?'server_emojis':'server_stickers').insert({server_id:D.srv.id,name:n,url:sb.storage.from('chat-images').getPublicUrl(path).data.publicUrl,created_by:me.id});
+    if(r.error)return toast(r.error.code==='23505'?'That name is already used':r.error.message);await reloadAssets();T.Emojis()};
+   const row=(x,tbl,pre)=>h('div',{className:'row'},h('img',{src:x.url,style:'height:2rem;vertical-align:middle'}),` ${pre}${x.name}${pre?':':''} `,h('button',{on:{click:async()=>{const{error}=await sb.from(tbl).delete().eq('id',x.id);if(error)return toast(error.message);await reloadAssets();T.Emojis()}}},'Delete'));
+   pane.replaceChildren(h('div',{className:'bar'},kind,nm,f,h('button',{on:{click:up}},'Upload')),h('small',{},'Type :name: in this server to use an emoji. Stickers are picked with 🏷. Limits: 50 emojis, 30 stickers.'),
+    h('b',{},'Emojis ('+D.emojis.length+')'),...D.emojis.map(e=>row(e,'server_emojis',':')),h('b',{},'Stickers ('+D.stickers.length+')'),...D.stickers.map(s=>row(s,'server_stickers','')))},
+  Bots:async()=>{
+   const ids=D.bots.map(x=>x.bot_id),info=ids.length?((await sb.from('bots').select('id,name,avatar,color,lang,owner_login,description,enabled').in('id',ids)).data||[]):[],mgr=perms.has('manage_bots'),addBox=h('div');
+   const draw=async()=>pane.replaceChildren(...(D.bots.length?D.bots.map(x=>{const bt=info.find(i=>i.id===x.bot_id);return h('div',{className:'row'},h('span',{style:'margin-right:0.3125rem'},[...String(bt?.avatar||'🤖')].slice(0,8).join('')),h('b',{style:'color:'+(bt?.color||'inherit')},bt?.name||'(deleted bot)'),` [${bt?.lang||'?'}] by @${bt?.owner_login||'?'}${bt&&!bt.enabled?' (disabled)':''} `,
+     mgr?h('button',{on:{click:async()=>{const{error}=await sb.from('server_bots').delete().eq('server_id',D.srv.id).eq('bot_id',x.bot_id);if(error)return toast(error.message);D.bots=D.bots.filter(y=>y.bot_id!==x.bot_id);botHostSync();T.Bots()}}},'Remove'):'',bt?.description?h('div',{style:'opacity:.7'},bt.description):'')}):[h('p',{},'No bots in this server yet.')]),mgr?h('hr'):'',mgr?addBox:'',
+     h('p',{style:'opacity:.7'},'Bots are run by the browser of a member who has the site open, and reply to commands that start with their prefix (default !).'));
+   await draw();
+   if(mgr){const{data}=await sb.from('bots').select('id,name,avatar,lang,owner_login,owner_id,is_public').eq('enabled',true).order('name');
+    const av2=(data||[]).filter(x=>(x.is_public||x.owner_id===me.id)&&!ids.includes(x.id)),sel=h('select',{},...av2.map(x=>h('option',{value:x.id},`${x.avatar||'🤖'} ${x.name} [${x.lang}] by @${x.owner_login}`)));
+    addBox.replaceChildren(h('b',{},'Add a bot'),av2.length?h('div',{className:'bar'},sel,h('button',{on:{click:async()=>{const{error}=await sb.rpc('srv_add_bot',{p_server:D.srv.id,p_bot:sel.value});if(error)return toast(error.message);D.bots.push({server_id:D.srv.id,bot_id:sel.value});botHostSync();T.Bots()}}},'Add')):h('p',{},'No bots available. Public bots from other people and your own bots show up here. Make one in the Bot Creator app.'))}},
+  Bans:async()=>{const{data}=await sb.from('server_bans').select('*').eq('server_id',D.srv.id);await prof((data||[]).map(x=>x.user_id));
+   pane.replaceChildren(...((data||[]).length?data.map(x=>h('div',{className:'row'},dn(SP[x.user_id]||{login:'?'})+' ',h('button',{on:{click:async()=>{const{error}=await sb.rpc('srv_ban',{p_server:D.srv.id,p_target:x.user_id,p_ban:false});toast(error?error.message:'Unbanned');T.Bans()}}},'Unban'))):[h('p',{},'Nobody is banned.')]))}};
+  const reloadRoles=async()=>{const[ro,mr]=await Promise.all([sb.from('server_roles').select('*').eq('server_id',D.srv.id).order('pos'),sb.from('server_member_roles').select('*').eq('server_id',D.srv.id)]);D.roles=ro.data||[];D.mroles={};(mr.data||[]).forEach(r=>(D.mroles[r.user_id]??=[]).push(r.role_id));perms=calc()};
+  const reloadAssets=async()=>{const[em,st]=await Promise.all([sb.from('server_emojis').select('*').eq('server_id',D.srv.id).order('name'),sb.from('server_stickers').select('*').eq('server_id',D.srv.id).order('name')]);D.emojis=em.data||[];D.stickers=st.data||[]};
+  pane.textContent='Loading...';Promise.resolve(T[tab]()).catch(e=>pane.textContent='Something broke: '+e.message)}
+
+ /* ---------- start ---------- */
+ await loadList();
+ let pend='';try{pend=sessionStorage.getItem('pinv')||''}catch(e){}
+ if(pend)joinView(pend);else{const last=store.get('srv_cur',null);if(servers.find(s=>s.id===last))openSrv(last);else if(servers[0])openSrv(servers[0].id);else noServer()}
+}
+
+const APPS=[['weather','Weather','☁',weather],['rss','News','📰',rss],['radio','Radio','📻',radio,360,420],['chat','Global Chat','💬',chat,400,440],['voice','Voice','🎙',voice,480,540],['profile','My Profile','🪪',profileApp,360,470],['online',"Who's Online",'🟢',online,320,380],['people','People','👤',peopleApp,400,500],['shop','JS Shop','🛒',shop,500,560],['builder','App Builder','🧱',builder,500,540],['calc','Calculator','🧮',calc,270,340],['paint','Paint','🎨',paint,430,420],['snake','Snake','🐍',snake,350,400],['nes','NES Emulator','🎮',nesApp,560,560],['term','JS Linux','🐧',jslinuxApp,720,520],['notes','Notepad','📝',notes,340,300],['levels','Levels','⭐',levelsApp,360,440],['clicker','Cookie Clicker','🍪',clicker,360,480],['dm','Messages','💌',dmApp,520,420],['powers','Powers','⚡',powers,480,620],['groups','Group Chats','👥',groupsApp,540,440],['servers','Servers','🏰',serversApp,700,520],['botcreator','Bot Creator','🤖',botCreator,640,580],['report','Report','🚩',reportApp,440,480],['status','Status','🟢',statusApp,340,540],['rp','Roleplay','RP',rpApp,500,520],['settings','Settings','⚙',settings,360,480],['admin','Admin','🛡',admin,540,480],['about','About','💾',about,400,440],['bin','Recycle Bin','🗑',binApp,380,340]];
 function lp(el,fn){let t,sx,sy;const c=()=>clearTimeout(t);
  el.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse')return;sx=e.clientX;sy=e.clientY;el._lp=0;const tg=e.target;t=setTimeout(()=>{el._lp=1;fn({clientX:sx,clientY:sy,target:tg,preventDefault(){},stopPropagation(){}})},500)});
  el.addEventListener('pointermove',e=>{if(Math.abs(e.clientX-sx)>10||Math.abs(e.clientY-sy)>10)c()});el.addEventListener('pointerup',c);el.addEventListener('pointercancel',c);
@@ -1596,7 +2143,7 @@ function desk(){
  const d=$('#desk'),m=$('#menu'),B=bin();d.replaceChildren();m.replaceChildren();
  const hid=B.filter(x=>x.k==='sys').map(x=>x.id);
  const items=[
-  ...APPS.filter(a=>(a[0]!=='admin'||staff())&&(a[0]!=='powers'||hasPowers())&&!hid.includes(a[0])&&!(a[0]==='calc'&&calcBroken)).map(a=>({key:'a:'+a[0],bin:a[0]==='bin',i:a[2],n:a[0]==='bin'&&B.length?'Recycle Bin ('+B.length+')':a[1],f:()=>win(a[0],a[1],a[2],a[3],a[4],a[5]),del:a[0]==='bin'?null:()=>trash({k:'sys',id:a[0],n:a[1],i:a[2]})})),
+  ...APPS.filter(a=>(a[0]!=='admin'||staff())&&(a[0]!=='botcreator'||can('create_bots'))&&(a[0]!=='powers'||hasPowers())&&!hid.includes(a[0])&&!(a[0]==='calc'&&calcBroken)).map(a=>({key:'a:'+a[0],bin:a[0]==='bin',i:a[2],n:a[0]==='bin'&&B.length?'Recycle Bin ('+B.length+')':a[1],f:()=>win(a[0],a[1],a[2],a[3],a[4],a[5]),del:a[0]==='bin'?null:()=>trash({k:'sys',id:a[0],n:a[1],i:a[2]})})),
   ...store.get('apps',[]).map(a=>({key:'u:'+a.id,i:a.icon,n:a.name,f:()=>runApp(a),del:()=>{store.set('apps',store.get('apps',[]).filter(x=>x.id!==a.id));trash({k:'usr',id:a.id,n:a.name,i:a.icon,app:a})}})),
   ...FILES().map(f=>({key:'f:'+f.id,i:f.k==='img'?'🖼':'📄',n:f.name,f:()=>openFile(f.id),
    x:[['Send...',()=>{const g=FILES().find(y=>y.id===f.id);if(g)sendDialog({id:g.id,kind:g.k,name:g.name,data:g.data})}],['Rename',()=>renameFile(f.id)],['Download',()=>dlFile(FILES().find(y=>y.id===f.id)||f)]],del:()=>delFile(f.id)}))];
@@ -1661,7 +2208,7 @@ async function loadMe(){
   }
 
   curUid=me?.id||null;
-  startNotify();startFx();roster();loadCols();repStart();grpStart();
+  startNotify();startFx();roster();loadCols();repStart();grpStart();botHostStart();srvInviteCheck();
   presence();
   desk();
   tray();
