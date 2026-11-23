@@ -1996,6 +1996,9 @@ async function serversApp(b,w){
  const delMsg=(m,r)=>async()=>{const{error}=await sb.from('server_messages').delete().eq('id',m.id);if(error)return toast(error.message);r.remove()};
  function msgRow(m){
   const canDel=!!me&&(m.user_id===me.id||perms.has('manage_messages'));let r;
+  if(m.is_system){const sp=SP[m.user_id]||{login:m.login||'?'};
+   r=h('div',{className:'msg',id:'sm'+m.id,style:'color:var(--ink);background:rgba(111,242,197,.3);border-left:3px solid var(--mint);padding:2px 0.375rem;margin:2px 0'},'👋 Welcome to ',h('b',{},D.srv.name),', ',h('b',{style:'cursor:pointer',on:{click:()=>SP[m.user_id]&&openProfile(sp)}},dn(sp)),'!');
+   if(canDel)r.append(' ',h('button',{on:{click:delMsg(m,r)}},'x'));return r}
   if(m.bot_id)return r=botMsgRow(m,srich,delMsg(m,{remove:()=>r.remove()}),canDel,'sm');
   const p=SP[m.user_id]||{login:m.login||'?'},a=av(p);
   r=h('div',{className:'msg',id:'sm'+m.id},a?h('img',{src:a,width:22,height:22,style:'vertical-align:middle;margin-right:0.3125rem;cursor:pointer;border:1px solid var(--ink);object-fit:cover',on:{click:()=>SP[m.user_id]&&openProfile(p)}}):'',
@@ -2050,8 +2053,11 @@ async function serversApp(b,w){
     ic=h('input',{maxLength:300,value:CHATIMG.test(D.srv.icon||'')?'':(D.srv.icon||''),placeholder:'Emoji, or upload an image',disabled:!perms.has('manage_server'),style:'width:8rem'}),f=h('input',{type:'file',accept:'image/png,image/jpeg,image/gif,image/webp',style:'display:none'});
    const upd=async patch=>{const{error}=await sb.from('servers').update(patch).eq('id',D.srv.id);if(error)return toast(error.message);Object.assign(D.srv,patch);const i=servers.findIndex(s=>s.id===D.srv.id);if(i>-1)Object.assign(servers[i],patch);drawRail();toast('Saved')};
    f.onchange=async()=>{const x=f.files[0];f.value='';if(!x)return;if(!IMGEXT[x.type]||x.size>512e3)return toast('PNG, JPG, GIF or WebP under 512 KB');const path=`${me.id}/srv-${Date.now()}.${IMGEXT[x.type]}`,{error}=await sb.storage.from('chat-images').upload(path,x,{contentType:x.type});if(error)return toast(error.message);upd({icon:sb.storage.from('chat-images').getPublicUrl(path).data.publicUrl})};
+   const sysSel=h('select',{disabled:!perms.has('manage_server'),style:'width:100%'},h('option',{value:''},'No system messages'),...D.chans.map(c=>h('option',{value:String(c.id)},'# '+c.name)));
+   sysSel.value=D.srv.system_channel_id==null?'':String(D.srv.system_channel_id);
    pane.replaceChildren(h('div',{},'Name'),nm,h('div',{},'Description'),ds,h('div',{},'Icon'),h('div',{className:'bar'},ic,perms.has('manage_server')?h('button',{on:{click:()=>f.click()}},'Upload image'):'',f),
-    perms.has('manage_server')?h('div',{className:'bar'},h('button',{on:{click:()=>{if(nm.value.trim().length<2)return toast('Name needs 2 to 32 characters');upd({name:nm.value.trim(),description:ds.value.trim()||null,icon:ic.value.trim()||(CHATIMG.test(D.srv.icon||'')?D.srv.icon:null)})}}},'Save')):'',
+    h('div',{},'System messages channel (welcome messages for new members)'),sysSel,
+    perms.has('manage_server')?h('div',{className:'bar'},h('button',{on:{click:()=>{if(nm.value.trim().length<2)return toast('Name needs 2 to 32 characters');const sc=D.chans.find(c=>String(c.id)===sysSel.value);upd({name:nm.value.trim(),description:ds.value.trim()||null,icon:ic.value.trim()||(CHATIMG.test(D.srv.icon||'')?D.srv.icon:null),system_channel_id:sc?sc.id:null})}}},'Save')):'',
     h('hr'),owner?h('button',{on:{click:async()=>{if(prompt('Type the server name to delete it forever:')!==D.srv.name)return toast('Name did not match');const{error}=await sb.from('servers').delete().eq('id',D.srv.id);if(error)return toast(error.message);if(rt){sb.removeChannel(rt);rt=null}D=null;await loadList();noServer()}}},'🗑 Delete server'):
      h('button',{on:{click:async()=>{if(!confirm('Leave '+D.srv.name+'?'))return;const{error}=await sb.rpc('leave_server',{p_server:D.srv.id});if(error)return toast(error.message);if(rt){sb.removeChannel(rt);rt=null}D=null;await loadList();noServer()}}},'Leave server'),
     h('p',{style:'opacity:.7'},'Owner: @'+(SP[D.srv.owner_id]?.login||'?')+'  |  Created '+new Date(D.srv.created_at).toLocaleDateString()+'  |  Your perms: '+(owner?'all (owner)':[...perms].join(', ')||'none')))},
