@@ -2128,7 +2128,7 @@ const hm=()=>H[clamp(S.home|0,0,H.length-1)],
  fleet=()=>R.reduce((a,r)=>a+(S.rigs[r.id]||0)*r.c,0),
  resale=()=>fleet()*.55*S.hp/100,
  lim=()=>Math.round(1000+2500*(S.home||0)+.35*resale()),
- svcCost=()=>Math.round(fleet()*.08*(100-S.hp)/100);
+ svcCost=()=>{const hp=+S.hp;if(!isFinite(hp)||hp>=99.5)return 0;return Math.max(1,Math.round(Math.max(fleet(),180)*.08*(100-hp)/100))};
 function norm(s){if(s.v!==2){['rigs','up','st','cash','coin','bank','loan','price','hist','mt','oc','heat','xp','lvl'].forEach(k=>delete s[k]);s.v=2}
  const d={rigs:{pc:1},up:{},ach:{},price:20,hist:[],news:'Welcome to the Luni Exchange!',trades:0,tot:0,reboots:0,loan:0,out:0,snd:true,crt:false,wp:'#008080',cheats:false,cx:{},clicks:0,bjw:0,daily:'',streak:0,tb:'',cash:1500,coin:0,bank:0,lvl:1,xp:0,st:{},mt:[0,0,0],oc:false,heat:30,bsod:0,home:0,hp:100,diff:1,tar:.12,hwm:1,day:0,mrev:0,mexp:0,late:0,amb:0,reg:0,sd:[]};
  for(const k in d)if(s[k]===undefined)s[k]=d[k];s.last=s.last||Date.now();return s}
