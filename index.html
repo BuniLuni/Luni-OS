@@ -2451,14 +2451,35 @@ async function serversApp(b,w){
 }
 
 /* ---- LUNI-DOS: a terminal mystery with secrets ---- */
-function dosApp(b,w){
+async function dosApp(b,w){
+ b.style.cssText+=';background:#000;color:#aaa;font:14px "Courier New",monospace;padding:0.375rem';b.append(h('div',{},'Loading save...'));
  const rnd=n=>Math.random()*n|0,K=x=>String(x).toUpperCase();
  const PAL=['#000000','#0000aa','#00aa00','#00aaaa','#aa0000','#aa00aa','#aa5500','#aaaaaa','#555555','#5555ff','#55ff55','#55ffff','#ff5555','#ff55ff','#ffff55','#ffffff'];
  const ERR='#ff5555',OK='#55ff55',WARN='#ffff55',SEC='#ff55ff',DIM='#888888',HI='#ffffff',CY='#55ffff';
  const enc=(s,k)=>s.replace(/[A-Za-z]/g,c=>{const o=c<'a'?65:97;return String.fromCharCode(((c.charCodeAt(0)-o+k)%26+26)%26+o)});
  const ST0=()=>({pers:0,admin:0,dec:0,bbs:0,nim:0,vault:0,unhid:[],tries:0});
- let st=Object.assign(ST0(),store.get('dos_st',{})),meta=Object.assign({found:[],end:[]},store.get('dos_meta',{}));
- const sv=()=>{store.set('dos_st',st);store.set('dos_meta',meta)};
+ /* ---------- save data: local + cloud (app_saves table, app_id 'dos') ---------- */
+ const CK='dos',cloudOn=()=>typeof sb!=='undefined'&&sb&&typeof me!=='undefined'&&me,UID=cloudOn()?me.id:'guest',LK=k=>UID==='guest'?k:k+':'+UID;
+ const rd=k=>store.get(LK(k),UID==='guest'?undefined:store.get(k,undefined));
+ const L={st:Object.assign(ST0(),rd('dos_st')||{}),meta:{found:[],end:[],...(rd('dos_meta')||{})},col:rd('dos_col')||'07',t:rd('dos_t')||0};
+ let cloud=cloudOn()?'syncing':'off',C0=null;
+ if(cloudOn()){try{const r=await Promise.race([sb.from('app_saves').select('data').eq('app_id',CK).eq('user_id',me.id).maybeSingle(),new Promise(r=>setTimeout(()=>r(null),4000))]);
+  if(r&&!r.error){cloud='on';try{C0=r.data&&r.data.data?JSON.parse(r.data.data):null}catch{C0=null}}else cloud='err'}catch{cloud='err'}}
+ if(!document.body.contains(w.el))return;
+ b.replaceChildren();
+ const useC=C0&&typeof C0==='object'&&C0.st&&(C0.t||0)>=L.t,B=useC?C0:L;
+ let st=Object.assign(ST0(),B.st),colv=B.col||'07',tNow=Math.max(L.t,(C0&&C0.t)||0);
+ const uni=(a,c)=>[...new Set([...(a||[]),...(c||[])])];
+ let meta={found:uni(L.meta.found,C0&&C0.meta&&C0.meta.found),end:uni(L.meta.end,C0&&C0.meta&&C0.meta.end)};
+ let dirty=false,pushT=0,warned=0;
+ const push=async()=>{pushT=0;if(!cloudOn()||!dirty)return cloud;dirty=false;
+  try{const{error}=await sb.from('app_saves').upsert({user_id:me.id,app_id:CK,data:JSON.stringify({st,meta,col:colv,t:tNow}),updated_at:new Date().toISOString()});if(error)throw error;cloud='on'}
+  catch(e){dirty=true;cloud='err';if(!warned){warned=1;try{toast('LUNI-DOS cloud save failed, kept in this browser: '+(e.message||e))}catch{}}}return cloud};
+ const sv=()=>{tNow=Date.now();store.set(LK('dos_st'),st);store.set(LK('dos_meta'),meta);store.set(LK('dos_col'),colv);store.set(LK('dos_t'),tNow);
+  if(cloudOn()){dirty=true;clearTimeout(pushT);pushT=setTimeout(push,800)}};
+ if(useC||(C0&&meta.found.length)){store.set(LK('dos_st'),st);store.set(LK('dos_meta'),meta);store.set(LK('dos_col'),colv);store.set(LK('dos_t'),tNow)}
+ if(cloudOn()&&!C0&&cloud==='on'&&(L.t||L.meta.found.length||L.st.pers))sv();/* first login: upload existing local progress */
+ const pagehide=()=>{if(dirty)push()};addEventListener('pagehide',pagehide);
  const SECRETS=[['hidden','The file that did not want to be found'],['decrypt','Cracked the notes'],['sysop','The sysop\'s last page'],['nim','Beat the machine at its own game'],['vault','Opened the vault'],['xyzzy','A hollow voice'],['iddqd','God mode?'],['format','Tried to format the unformattable'],['sudo','Wrong operating system'],['matrix','Followed the white rabbit'],['luni','Luni was here'],['delall','Scorched earth, denied']];
  const ENDS=[['leak','Leak: the truth gets out'],['wipe','Wipe: the quiet exit'],['keep','Keep: a dangerous copy']];
 
@@ -2521,7 +2542,7 @@ If anything happens to me, the truth is in the vault.`;
  const prm=()=>{pl.textContent=ptxt()};
  const seq=(L,done)=>{busy=true;inp.disabled=true;let i=0;const nx=()=>{if(i>=L.length){busy=false;done&&done();if(!busy){inp.disabled=false;prm();inp.focus()}return}const[t,c,d]=L[i++];later(()=>{pr(t,c);nx()},d==null?110:d)};nx()};
  const secret=(id,msg)=>{if(meta.found.includes(id))return;meta.found.push(id);sv();pr('',null);pr('*** SECRET DISCOVERED ('+meta.found.length+'/'+SECRETS.length+'): '+msg+' ***',SEC)};
- const applyCol=c=>{const m=/^([0-9A-F])([0-9A-F])$/i.exec(c||'');if(m){scr.style.background=PAL[parseInt(m[1],16)];scr.style.color=PAL[parseInt(m[2],16)]}};applyCol(store.get('dos_col','07'));
+ const applyCol=c=>{const m=/^([0-9A-F])([0-9A-F])$/i.exec(c||'');if(m){scr.style.background=PAL[parseInt(m[1],16)];scr.style.color=PAL[parseInt(m[2],16)]}};applyCol(colv);
 
  function resolve(p){let s=K(p||'').replace(/\//g,'\\'),base=[...cwd];
   if(/^[A-Z]:/.test(s)){s=s.slice(2);base=[];if(s[0]==='\\')s=s.slice(1)}else if(s[0]==='\\'){base=[];s=s.slice(1)}
@@ -2534,7 +2555,8 @@ If anything happens to me, the truth is in the vault.`;
 
  /* ---------- commands ---------- */
  const C={
-  help:()=>pr('Commands:\n  DIR [/A] [path]    list files          CD <dir>         change directory\n  TYPE <file>        show a file         CLS              clear screen\n  ATTRIB [-H file]   file attributes     COLOR xy         set colors, e.g. COLOR 0A\n  LOGIN <user> <pw>  log in              MAIL [n]         read mail (login needed)\n  DECRYPT <file> <key>  decrypt a file   DIAL <number>     use the modem\n  VAULT <a> <b> <c>  enter a vault code  HINT             nudge me forward\n  SECRETS            show progress       VER MEM DATE TIME ECHO RESET\nPrograms run by name (the PATH is set in AUTOEXEC.BAT).\nTab completes names. Up/Down recalls history.',HI),
+  help:()=>pr('Commands:\n  DIR [/A] [path]    list files          CD <dir>         change directory\n  TYPE <file>        show a file         CLS              clear screen\n  ATTRIB [-H file]   file attributes     COLOR xy         set colors, e.g. COLOR 0A\n  LOGIN <user> <pw>  log in              MAIL [n]         read mail (login needed)\n  DECRYPT <file> <key>  decrypt a file   DIAL <number>     use the modem\n  VAULT <a> <b> <c>  enter a vault code  HINT             nudge me forward\n  SECRETS            show progress       SAVE             sync to your account\n  VER MEM DATE TIME ECHO RESET\nPrograms run by name (the PATH is set in AUTOEXEC.BAT).\nTab completes names. Up/Down recalls history.',HI),
+  save:async()=>{if(!cloudOn())return pr('Cloud save: OFF. Log in to the site to sync across devices.\nProgress is still saved in this browser.',WARN);if(cloud==='syncing')return pr('Still syncing...',DIM);dirty=true;pr('Syncing...',DIM);const r=await push();pr(r==='on'?'Cloud save: OK. Progress is stored in your account.':'Cloud save: FAILED. Kept in this browser; will retry on the next change.',r==='on'?OK:ERR)},
   cls:()=>{[...scr.children].forEach(c=>{if(c!==row)c.remove()})},
   ver:()=>pr('LUNI-DOS Version 6.22'),
   mem:()=>pr('655,360 bytes total conventional memory\n589,824 bytes available to LUNI-DOS\n 12,288 bytes used by ORACLE.SYS (cannot be unloaded)'),
@@ -2550,7 +2572,7 @@ If anything happens to me, the truth is in the vault.`;
    pr(f.c);const nm=r.path[r.path.length-1];if(nm==='.PERSONAL'){st.pers=1;sv();secret('hidden','a file that did not want to be found')}if(nm==='~LUNI.TMP')secret('luni','Luni was here')},
   attrib:a=>{const un=a.findIndex(x=>K(x)==='-H');if(un>-1){const r=resolve(a.filter((x,i)=>i!==un).join(' '));if(r.err||r.n.k)return pr(r.err||'File not found',ERR);const key=r.path.join('\\');if(!st.unhid.includes(key))st.unhid.push(key);sv();return pr('Hidden attribute cleared.',OK)}
    const r=resolve('.');pr(Object.entries(r.n.k).map(([n,f])=>(isHid(f,[...r.path,n])?'    H  ':'       ')+'C:\\'+[...r.path,n].join('\\')).join('\n')||'File not found')},
-  color:a=>{if(!/^[0-9A-F]{2}$/i.test(a[0]||''))return pr('Usage: COLOR <bg><fg> as hex digits. COLOR 0A = green on black, COLOR 07 resets.');if(a[0][0]===a[0][1])return pr('Foreground and background cannot match.',ERR);applyCol(a[0]);store.set('dos_col',a[0])},
+  color:a=>{if(!/^[0-9A-F]{2}$/i.test(a[0]||''))return pr('Usage: COLOR <bg><fg> as hex digits. COLOR 0A = green on black, COLOR 07 resets.');if(a[0][0]===a[0][1])return pr('Foreground and background cannot match.',ERR);applyCol(a[0]);colv=a[0];sv()},
   login:a=>{if(a.length<2)return pr('Usage: LOGIN <user> <password>',ERR);if(K(a[0])!=='HALVORSEN')return pr('Unknown user.',ERR);if(K(a[1])!=='MAGNUS1987')return pr('Password incorrect.',ERR);
    if(st.admin)return pr('Already logged in as HALVORSEN.');seq([['Verifying...',DIM,500],['Welcome back, Rolf. Last login 11-03-96 02:31.',OK,300],['Directory C:\\ADMIN unlocked. You have new mail: MAIL',WARN,150]],()=>{st.admin=1;sv()})},
   mail:a=>{if(!st.admin)return pr('MAIL: you must LOGIN first.',ERR);const n=parseInt(a[0],10);if(n>=1&&n<=MAILS.length){const m=MAILS[n-1];return pr('From: '+m[0]+'\nSubject: '+m[1]+'\n\n'+m[2])}
@@ -2627,10 +2649,10 @@ If anything happens to me, the truth is in the vault.`;
   else if(e.key==='ArrowDown'){e.preventDefault();hi=Math.min(hist.length,hi+1);inp.value=hist[hi]||''}
   else if(e.key==='l'&&e.ctrlKey){e.preventDefault();C.cls()}};
  scr.onclick=()=>{if(!(getSelection&&String(getSelection())))inp.focus()};
- w.onclose=()=>{timers.forEach(t=>{clearTimeout(t);clearInterval(t)});timers.clear()};
+ w.onclose=()=>{removeEventListener('pagehide',pagehide);clearTimeout(pushT);if(dirty)push();timers.forEach(t=>{clearTimeout(t);clearInterval(t)});timers.clear()};
 
  /* ---------- boot ---------- */
- const BOOT=[['LUNI-BIOS (C) 1993 Luni Systems Inc.',HI,150],['',null,60],['Memory test: 655360K OK',null,500],['Detecting drives... C: 40MB',null,400],['Loading LUNI-DOS 6.22...',null,600],['HIMEM.SYS loaded',DIM,200],['Modem found on COM2',DIM,300],['',null,100],
+ const BOOT=[['LUNI-BIOS (C) 1993 Luni Systems Inc.',HI,150],['',null,60],['Memory test: 655360K OK',null,500],['Detecting drives... C: 40MB',null,400],['Loading LUNI-DOS 6.22...',null,600],['HIMEM.SYS loaded',DIM,200],['Modem found on COM2',DIM,300],['Cloud save: '+(cloud==='on'?'ONLINE (account)':cloud==='err'?'UNREACHABLE (using this browser)':'OFF (log in to sync)'),cloud==='on'?OK:DIM,200],['',null,100],
   ['LUNI-DOS Version 6.22\n(C)Copyright Luni Systems 1993-1996.',HI,100],['',null,50],['This workstation belonged to R. Halvorsen, Meridian Systems.\nLast logoff: 11-03-1996, 02:31a. He never came back.',WARN,200],['',null,50],['Type HELP to begin. (Press any key to skip this boot.)',DIM,100]];
  booting=true;inp.disabled=true;let bi=0;
  const bootStep=()=>{if(bi>=BOOT.length||skip){if(skip)while(bi<BOOT.length){pr(BOOT[bi][0],BOOT[bi][1]);bi++}booting=false;busy=false;inp.disabled=false;mode='sh';prm();inp.focus();return}const[t,c,d]=BOOT[bi++];later(()=>{pr(t,c);bootStep()},skip?0:d)};
