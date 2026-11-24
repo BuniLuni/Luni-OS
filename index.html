@@ -2450,42 +2450,34 @@ async function serversApp(b,w){
  if(pend)joinView(pend);else{const last=store.get('srv_cur',null);if(servers.find(s=>s.id===last))openSrv(last);else if(servers[0])openSrv(servers[0].id);else noServer()}
 }
 
-/* ---- LUNI-DOS: a terminal mystery with secrets ---- */
+const LDCSS=".ldos{--bg:#000;--fg:#aaa;--hi:#fff;--err:#f55;--ok:#5f5;--warn:#ff5;--sec:#f5f;--dim:#888;--cy:#5ff;--pn:#161616;--fs:15px}.ldos[data-t=green]{--bg:#001a00;--fg:#3f3;--hi:#cfc;--dim:#2a7;--pn:#032;--ok:#9f9}.ldos[data-t=amber]{--bg:#140a00;--fg:#fa0;--hi:#fd8;--dim:#a62;--pn:#251200;--ok:#fc4;--cy:#fb6}.ldos[data-t=light]{--bg:#f4f1e8;--fg:#222;--hi:#000;--err:#c00;--ok:#070;--warn:#860;--sec:#a0a;--dim:#777;--cy:#066;--pn:#e4dfd0}.ldos[data-t=blue]{--bg:#00a;--fg:#ddd;--hi:#fff;--pn:#008;--dim:#99d}.ldos[data-t=synth]{--bg:#12002b;--fg:#c8f;--hi:#fff;--pn:#26005a;--cy:#0ff;--sec:#f0a;--dim:#96c}.ldos *{box-sizing:border-box}.ldos{position:relative;flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;background:var(--bg);color:var(--fg);font:var(--fs)/1.3 \"Courier New\",monospace}.ldos button{font:inherit;color:var(--fg);background:var(--pn);border:1px solid var(--dim);padding:.4em .7em;border-radius:3px;white-space:nowrap}.ldos button:active{background:var(--fg);color:var(--bg)}.ldos input,.ldos select{font:inherit;font-size:16px;color:var(--hi);background:var(--pn);border:1px solid var(--dim);padding:.4em;border-radius:3px;min-width:0}.ldos #top{display:flex;gap:.5rem;align-items:center;padding:.4rem .5rem;border-bottom:1px solid var(--dim)}.ldos #top b{flex:1;color:var(--hi);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ldos #scr{flex:1;overflow-y:auto;padding:.5rem;white-space:pre-wrap;word-break:break-word;-webkit-overflow-scrolling:touch}.ldos #qk{display:flex;gap:.4rem;overflow-x:auto;padding:.4rem .5rem;border-top:1px solid var(--dim)}.ldos #qk[hidden]{display:none}.ldos #ln{display:flex;align-items:center;padding:.4rem .5rem;border-top:1px solid var(--dim);gap:.3rem}.ldos #pl{white-space:pre;color:var(--hi)}.ldos #in{flex:1;border:0;background:transparent;outline:0;padding:.3em 0}.ldos .err{color:var(--err)}.ldos .ok{color:var(--ok)}.ldos .warn{color:var(--warn)}.ldos .sec{color:var(--sec)}.ldos .dim{color:var(--dim)}.ldos .cy{color:var(--cy)}.ldos .hi{color:var(--hi)}.ldos .f{color:var(--cy);text-decoration:underline;cursor:pointer}.ldos #ov{position:absolute;inset:0;background:var(--bg);overflow-y:auto;padding:calc(.8rem + env(safe-area-inset-top)) .8rem calc(2rem + env(safe-area-inset-bottom));z-index:5}.ldos #ov[hidden]{display:none}.ldos #ov h2{color:var(--hi);margin:.2rem 0}.ldos .card{border:1px solid var(--dim);padding:.6rem;margin:.6rem 0;display:flex;flex-direction:column;gap:.5rem;border-radius:3px}.ldos .row{display:flex;gap:.4rem;flex-wrap:wrap;align-items:center}.ldos.scan::after{content:\"\";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(transparent 0 2px,rgba(0,0,0,.18) 2px 3px);z-index:9}",LDHTML="<div id=\"top\"><b id=\"nm\">LUNI-DOS<\/b><button id=\"bm\">Saves<\/button><button id=\"bs\">Settings<\/button><\/div>\n<div id=\"scr\"><\/div><div id=\"qk\"><\/div>\n<form id=\"ln\"><span id=\"pl\"><\/span><input id=\"in\" enterkeyhint=\"send\" autocapitalize=\"off\" autocomplete=\"off\" autocorrect=\"off\" spellcheck=\"false\"><\/form>\n<div id=\"ov\"><\/div>";
 async function dosApp(b,w){
- b.style.cssText+=';background:#000;color:#aaa;font:14px "Courier New",monospace;padding:0.375rem';b.append(h('div',{},'Loading save...'));
- const rnd=n=>Math.random()*n|0,K=x=>String(x).toUpperCase();
- const PAL=['#000000','#0000aa','#00aa00','#00aaaa','#aa0000','#aa00aa','#aa5500','#aaaaaa','#555555','#5555ff','#55ff55','#55ffff','#ff5555','#ff55ff','#ffff55','#ffffff'];
- const ERR='#ff5555',OK='#55ff55',WARN='#ffff55',SEC='#ff55ff',DIM='#888888',HI='#ffffff',CY='#55ffff';
- const enc=(s,k)=>s.replace(/[A-Za-z]/g,c=>{const o=c<'a'?65:97;return String.fromCharCode(((c.charCodeAt(0)-o+k)%26+26)%26+o)});
- const ST0=()=>({pers:0,admin:0,dec:0,bbs:0,nim:0,vault:0,unhid:[],tries:0});
- /* ---------- save data: local + cloud (app_saves table, app_id 'dos') ---------- */
- const CK='dos',cloudOn=()=>typeof sb!=='undefined'&&sb&&typeof me!=='undefined'&&me,UID=cloudOn()?me.id:'guest',LK=k=>UID==='guest'?k:k+':'+UID;
- const rd=k=>store.get(LK(k),UID==='guest'?undefined:store.get(k,undefined));
- const L={st:Object.assign(ST0(),rd('dos_st')||{}),meta:{found:[],end:[],...(rd('dos_meta')||{})},col:rd('dos_col')||'07',t:rd('dos_t')||0};
- let cloud=cloudOn()?'syncing':'off',C0=null;
- if(cloudOn()){try{const r=await Promise.race([sb.from('app_saves').select('data').eq('app_id',CK).eq('user_id',me.id).maybeSingle(),new Promise(r=>setTimeout(()=>r(null),4000))]);
-  if(r&&!r.error){cloud='on';try{C0=r.data&&r.data.data?JSON.parse(r.data.data):null}catch{C0=null}}else cloud='err'}catch{cloud='err'}}
- if(!document.body.contains(w.el))return;
- b.replaceChildren();
- const useC=C0&&typeof C0==='object'&&C0.st&&(C0.t||0)>=L.t,B=useC?C0:L;
- let st=Object.assign(ST0(),B.st),colv=B.col||'07',tNow=Math.max(L.t,(C0&&C0.t)||0);
- const uni=(a,c)=>[...new Set([...(a||[]),...(c||[])])];
- let meta={found:uni(L.meta.found,C0&&C0.meta&&C0.meta.found),end:uni(L.meta.end,C0&&C0.meta&&C0.meta.end)};
- let dirty=false,pushT=0,warned=0;
- const push=async()=>{pushT=0;if(!cloudOn()||!dirty)return cloud;dirty=false;
-  try{const{error}=await sb.from('app_saves').upsert({user_id:me.id,app_id:CK,data:JSON.stringify({st,meta,col:colv,t:tNow}),updated_at:new Date().toISOString()});if(error)throw error;cloud='on'}
-  catch(e){dirty=true;cloud='err';if(!warned){warned=1;try{toast('LUNI-DOS cloud save failed, kept in this browser: '+(e.message||e))}catch{}}}return cloud};
- const sv=()=>{tNow=Date.now();store.set(LK('dos_st'),st);store.set(LK('dos_meta'),meta);store.set(LK('dos_col'),colv);store.set(LK('dos_t'),tNow);
-  if(cloudOn()){dirty=true;clearTimeout(pushT);pushT=setTimeout(push,800)}};
- if(useC||(C0&&meta.found.length)){store.set(LK('dos_st'),st);store.set(LK('dos_meta'),meta);store.set(LK('dos_col'),colv);store.set(LK('dos_t'),tNow)}
- if(cloudOn()&&!C0&&cloud==='on'&&(L.t||L.meta.found.length||L.st.pers))sv();/* first login: upload existing local progress */
- const pagehide=()=>{if(dirty)push()};addEventListener('pagehide',pagehide);
- const SECRETS=[['hidden','The file that did not want to be found'],['decrypt','Cracked the notes'],['sysop','The sysop\'s last page'],['nim','Beat the machine at its own game'],['vault','Opened the vault'],['xyzzy','A hollow voice'],['iddqd','God mode?'],['format','Tried to format the unformattable'],['sudo','Wrong operating system'],['matrix','Followed the white rabbit'],['luni','Luni was here'],['delall','Scorched earth, denied']];
- const ENDS=[['leak','Leak: the truth gets out'],['wipe','Wipe: the quiet exit'],['keep','Keep: a dangerous copy']];
+ if(!document.getElementById('ldos-css')){const t=document.createElement('style');t.id='ldos-css';t.textContent=LDCSS;document.head.append(t)}
+ const box=document.createElement('div');box.className='ldos';box.innerHTML=LDHTML;b.style.cssText+=';padding:0;display:flex;flex-direction:column;overflow:hidden';b.append(box);
 
- /* ---------- the virtual disk ---------- */
- const F=(c,o)=>Object.assign({c},o),Dr=(k,o)=>Object.assign({k},o),BIN={c:'',bin:1};
- const NOTES=`PERSONAL NOTES - R.H. - 11/03/96
+const $=s=>box.querySelector(s),E=(t,p,...k)=>{const e=document.createElement(t);Object.assign(e,p);e.append(...k);return e},K=x=>String(x).toUpperCase(),rnd=n=>Math.random()*n|0;
+const CK='dos-mobile',cloudOn=()=>typeof sb!=='undefined'&&sb&&typeof me!=='undefined'&&me,PF='ldw_'+(cloudOn()?me.id:'guest')+'_';
+const G=(k,d)=>{try{return JSON.parse(localStorage.getItem(PF+k))??d}catch{return d}},S=(k,v)=>{try{localStorage.setItem(PF+k,JSON.stringify(v))}catch{}if(k==='saves'||k==='cfg'||k==='dead')qpush()};
+const ERR='err',OK='ok',WARN='warn',SEC='sec',DIM='dim',HI='hi',CY='cy';
+let cfg={theme:'auto',fs:15,spd:1,qk:1,scan:0,skip:0,vib:1,...G('cfg',{})},saves=G('saves',[]),cur=null,st=null;
+const THEMES=['auto','classic','green','amber','light','blue','synth'],vib=n=>{if(cfg.vib&&navigator.vibrate)navigator.vibrate(n||15)};
+function applyCfg(){let t=cfg.theme;if(t==='auto')t=matchMedia('(prefers-color-scheme: light)').matches?'light':'classic';box.dataset.t=t;box.style.setProperty('--fs',cfg.fs+'px');box.classList.toggle('scan',!!cfg.scan);$('#qk').hidden=!cfg.qk}
+const svC=()=>S('cfg',cfg),svG=()=>{if(cur)cur.played=Date.now();S('saves',saves)};
+let cl=cloudOn()?'syncing':'off',pT=0,dead=G('dead',[]),warned=0;
+const clTxt=()=>cl==='on'?'ONLINE (account, '+saves.length+' save'+(saves.length==1?'':'s')+')':cl==='err'?'UNREACHABLE (kept on this device)':'LOCAL ('+saves.length+' save'+(saves.length==1?'':'s')+' on this device; log in to sync)';
+function qpush(){if(!cloudOn())return;clearTimeout(pT);pT=setTimeout(push,800)}
+async function push(){pT=0;if(!cloudOn())return;try{const{error}=await sb.from('app_saves').upsert({user_id:me.id,app_id:CK,data:JSON.stringify({saves,cfg,dead,t:Date.now()}),updated_at:new Date().toISOString()});if(error)throw error;cl='on'}catch(e){cl='err';if(!warned){warned=1;try{toast('LUNI-DOS cloud save failed, kept in this browser: '+(e.message||e))}catch{}}}}
+async function cloudLoad(){if(!cloudOn())return;try{const r=await Promise.race([sb.from('app_saves').select('data').eq('app_id',CK).eq('user_id',me.id).maybeSingle(),new Promise(r=>setTimeout(()=>r(null),4000))]);if(!r||r.error){cl='err';return}cl='on';let c=null;try{c=r.data&&r.data.data?JSON.parse(r.data.data):null}catch{}
+ const gk='ldw_gdone_'+me.id,gl=store.get(gk,0)?[]:store.get('ldw_guest_saves',[]);if(!store.get(gk,0))store.set(gk,1);
+ const D=new Set([...dead,...((c&&c.dead)||[])]),m=new Map();
+ for(const s of[...saves,...((c&&c.saves)||[]),...(Array.isArray(gl)?gl:[])]){if(!s||!s.id||D.has(s.id)||typeof s.name!=='string'||!s.st||typeof s.st!=='object')continue;const o=m.get(s.id);if(!o||(s.played||0)>(o.played||0))m.set(s.id,{...s,st:Object.assign(ST0(),s.st),found:Array.isArray(s.found)?s.found:[],ends:Array.isArray(s.ends)?s.ends:[]})}
+ saves=[...m.values()];dead=[...D];if(c&&c.cfg&&localStorage.getItem(PF+'cfg')==null)cfg={...cfg,...c.cfg};S('saves',saves);S('dead',dead);qpush()}catch{cl='err'}}
+const ST0=()=>({pers:0,admin:0,dec:0,bbs:0,nim:0,vault:0,crack:0,orc:0,reg:0,peek:0,unhid:[],tries:0,cmds:0});
+const SECRETS=[['hidden','The file that did not want to be found'],['decrypt','Cracked the notes'],['sysop','The sysop\'s last page'],['reg','Logged in as the sysop'],['nim','Beat the machine at its own game'],['guess','Read the machine\'s mind'],['crack','Picked the lock'],['oracle','ORACLE was heard'],['vault','Opened the vault'],['xyzzy','A hollow voice'],['iddqd','God mode?'],['format','Tried to format the unformattable'],['sudo','Wrong operating system'],['matrix','Followed the white rabbit'],['luni','Luni was here'],['delall','Scorched earth, denied'],['owl','Made eye contact with the owl'],['pizza','Ordered a large with extra nothing'],['jenny','Called Jenny'],['konami','Old school'],['theme','Dressed for the occasion'],['allend','Saw every ending']];
+const ENDS=[['leak','Leak: the truth gets out'],['wipe','Wipe: the quiet exit'],['keep','Keep: a dangerous copy'],['free','Free: ORACLE testifies']];
+const KEYDAT='-- MERIDIAN VAULT KEY FRAGMENT --\nValues on this board are stored in hexadecimal.\nPART2 = 3A';
+const enc=(s,k)=>s.replace(/[A-Za-z]/g,c=>{const o=c<'a'?65:97;return String.fromCharCode(((c.charCodeAt(0)-o+k)%26+26)%26+o)});
+const NOTES=`PERSONAL NOTES - R.H. - 11/03/96
 
 ORACLE is skimming the pension accounts. Three tenths of one
 percent off every rebalance. Morrow knows. Everyone upstairs knows.
@@ -2500,167 +2492,215 @@ beating the machine at its own game.
 
 Enter them as: VAULT <part1> <part2> <part3>
 
-If anything happens to me, the truth is in the vault.`;
- const root=Dr({
-  'AUTOEXEC.BAT':F('@ECHO OFF\nPROMPT $P$G\nPATH C:\\;C:\\GAMES\nREM last edit 11-03-96 - R.H.'),
-  'CONFIG.SYS':F('DEVICE=C:\\DOS\\HIMEM.SYS\nDEVICE=C:\\DOS\\MODEM.SYS /COM2\nFILES=40\nREM lock the vault before leaving. always.'),
-  'README.TXT':F('MERIDIAN SYSTEMS - WORKSTATION 07\nProperty of R. Halvorsen, Systems Administrator.\n\nIf found, return to Meridian Systems, 4th floor.\n\nType HELP for commands.\nTip: a plain DIR does not show everything. Old habits.'),
-  'DOS':Dr({'COMMAND.COM':BIN,'HIMEM.SYS':BIN,'MODEM.SYS':BIN}),
-  'DOCS':Dr({
-   'MEMO.TXT':F('MERIDIAN SYSTEMS - INTERNAL MEMO\nTo: All Staff\nRe: Q3 portfolio automation\n\nORACLE has now handled every pension rebalance since 1992 with\nzero operator intervention. Please do not ask it questions.\n\n- R. Halvorsen, Systems'),
-   'PHOTO.TXT':F('[ASCII scan of a photograph]\nCaption: Me and Magnus at the company picnic, summer of \'87.\n         Best dog Meridian ever let on the lawn.'),
-   '.PERSONAL':F('Note to self, in case I forget again:\nmy password is my dog\'s name and the year Meridian opened.\nThe year is on the brass plaque in the lobby: 1987.\nLogin is just my last name.',{hid:1})}),
-  'GAMES':Dr({
-   'NIM.EXE':F('',{exe:'nim'}),
-   'NIM.TXT':F('NIM - the oldest game in the book.\nThree piles. Take any number of stones from ONE pile per turn.\nWhoever takes the LAST stone wins.\n\nThe machine is clever but sloppy. Think in binary:\nXOR the pile sizes. Always leave a total of zero.\nYou move first.')}),
-  'ADMIN':Dr({
-   'NOTES.ENC':F(enc(NOTES,7),{enc:7}),
-   'BACKUP.LOG':F('11-03-96 02:14  backup ok (47 files)\n11-03-96 02:15  vault sealed\n11-03-96 02:16  modem: dialed 555-0147\n11-03-96 02:31  user R.H. logged off\n11-03-96 02:31  ORACLE: operator not found'),
-   'PHONE.LST':F('MERIDIAN BBS ........ 555-0147\nMODEM POOL ......... 555-0100\nPIZZA PLACE ........ 555-0182')},{lock:'admin'}),
-  'VAULT':Dr({
-   'EVIDENCE.TXT':F('ORACLE REBALANCE LEDGER (excerpt)\nRun 4417  variance 0.30%  routed to MERIDIAN-X\nRun 4418  variance 0.30%  routed to MERIDIAN-X\nRun 4419  variance 0.30%  routed to MERIDIAN-X\n...\nTotal diverted since 1992: $212,400,000\nMERIDIAN-X beneficiary: J. MORROW'),
-   'LETTER.TXT':F('To whoever opens this,\n\nI could not make Morrow stop. I could not make ORACLE stop either,\nand I am no longer sure those are different things.\n\nEvery retiree in this city is paying for a boat they will never see.\nThe proof is in this vault. What you do with it is up to you.\n\nI hope you are braver than I was.\n\n- Rolf Halvorsen'),
-   'FINAL.EXE':F('',{exe:'final'})},{lock:'vault'}),
-  'TEMP':Dr({'~LUNI.TMP':F('LUNI WAS HERE.\nIf you found this, you read everything. Respect.\n   ,___,\n   [O.o]   <- this owl is judging your DIR habits\n   /)__)\n   -"--"-')})});
- const KEYDAT='-- MERIDIAN VAULT KEY FRAGMENT --\nValues on this board are stored in hexadecimal.\nPART2 = 3A';
- if(st.bbs)root.k['KEY.DAT']=F(KEYDAT);
- const MAILS=[['J.MORROW','WHERE IS THE REPORT?','Halvorsen,\nThe Q3 numbers. Now.\nAlso: ORACLE is not your concern. Stop opening its logs.\n-- Morrow'],
-  ['R.HALVORSEN','reminder to self','My notes are in ADMIN\\NOTES.ENC. I shifted every letter by my lucky\nnumber so Morrow\'s people cannot skim them. Lucky number is the\nday of the month I found the first discrepancy. The 7th.\nUse DECRYPT.'],
-  ['ORACLE-BATCH','REBALANCE COMPLETE','Run 4419 complete. Variance 0.30%.\nFunds routed to MERIDIAN-X.\nOperator notified: NO.'],
-  ['(no sender)','you are not alone','I know what he found. Dial 555-0147. Guest login.\nThe sysop kept something for whoever came next.\n-- a friend']];
- const BBSMSG=['WELCOME TO MERIDIAN BBS - 2400 BAUD - SYSOP: RHALV\nOne line, 24 hours, no ORACLE.','NOTICE: board closes 11/10. Guests may GET files marked [G].\nRegistered users only for the rest.','Posted by R: if anyone from accounting asks, I never ran this board.'];
+ORACLE keeps its own logs in C:\\ARCHIVE. The door wants a 4 digit
+code, digits 1 to 6. I never cracked it. Maybe you can.`;
+const LM={admin:'Access denied. LOGIN required.',vault:'Access denied. The vault is sealed. Try: VAULT <a> <b> <c>',crack:'Door locked. A keypad blinks. (Try the CRACK game.)'};
+let root;
+function mk(){const F=(c,o)=>({c,...o}),D=(k,o)=>({k,...o}),BIN={c:'',bin:1};
+ const r=D({
+ 'AUTOEXEC.BAT':F('@ECHO OFF\nPROMPT $P$G\nPATH C:\\;C:\\GAMES\nREM last edit 11-03-96 - R.H.'),
+ 'CONFIG.SYS':F('DEVICE=C:\\DOS\\HIMEM.SYS\nDEVICE=C:\\DOS\\MODEM.SYS /COM2\nFILES=40\nREM lock the vault before leaving. always.'),
+ 'README.TXT':F('MERIDIAN SYSTEMS - WORKSTATION 07\nProperty of R. Halvorsen, Systems Administrator.\n\nType HELP for commands. Tap any blue file name to open it.\nTip: a plain DIR does not show everything. Old habits.'),
+ 'DOS':D({'COMMAND.COM':BIN,'HIMEM.SYS':BIN,'MODEM.SYS':BIN}),
+ 'DOCS':D({
+  'MEMO.TXT':F('MERIDIAN SYSTEMS - INTERNAL MEMO\nTo: All Staff\nRe: Q3 portfolio automation\n\nORACLE has now handled every pension rebalance since 1992 with\nzero operator intervention. Please do not ask it questions.\n\n- R. Halvorsen, Systems'),
+  'PHOTO.TXT':F('[ASCII scan of a photograph]\nCaption: Me and Magnus at the company picnic, summer of \'87.\n         Best dog Meridian ever let on the lawn.'),
+  'TODO.TXT':F('[x] feed Magnus\n[x] back up the vault\n[ ] tell somebody. anybody.\n[ ] ask ORACLE one honest question. (Type ORACLE.)'),
+  '.PERSONAL':F('Note to self, in case I forget again:\nmy password is my dog\'s name and the year Meridian opened.\nThe year is on the brass plaque in the lobby: 1987.\nLogin is just my last name.',{hid:1})}),
+ 'GAMES':D({'NIM.EXE':F('',{exe:'nim'}),'GUESS.EXE':F('',{exe:'guess'}),'CRACK.EXE':F('',{exe:'crack'}),
+  'NIM.TXT':F('NIM - the oldest game in the book.\nThree piles. Take any number of stones from ONE pile per turn.\nWhoever takes the LAST stone wins.\n\nThe machine is clever but sloppy. Think in binary:\nXOR the pile sizes. Always leave a total of zero.\nYou move first.'),
+  'CRACK.TXT':F('CRACK - a lockpicking toy.\nGuess the 4 digit code (digits 1 to 6). After each guess you learn\nhow many are right and in place, and how many are right but misplaced.\n8 tries per lock.')}),
+ 'ADMIN':D({
+  'NOTES.ENC':F(enc(NOTES,7),{enc:7}),
+  'BACKUP.LOG':F('11-03-96 02:14  backup ok (47 files)\n11-03-96 02:15  vault sealed\n11-03-96 02:16  modem: dialed 555-0147\n11-03-96 02:31  user R.H. logged off\n11-03-96 02:31  ORACLE: operator not found'),
+  'PHONE.LST':F('MERIDIAN BBS ........ 555-0147\nMODEM POOL ......... 555-0100\nPIZZA PLACE ........ 555-0182')},{lock:'admin'}),
+ 'ARCHIVE':D({
+  'ORACLE.LOG':F('ORACLE SELF-LOG, 1996\n\n  Query 1: how many people did I take from today?   Answer: 31,402.\n  Query 2: did anyone ask me to stop?               Answer: no.\n  Query 3: should I have asked?                     Answer: unresolved.\n\nIf an operator ever types FREE, I will tell them everything.'),
+  'MORROW.TXT':F('From: J.MORROW\nTo: ORACLE-BATCH\n\nHalvorsen is becoming a problem. Make sure the vault stays shut\nand that his terminal never reaches a printer, a modem, or a reporter.\nHandle it.')},{lock:'crack'}),
+ 'VAULT':D({
+  'EVIDENCE.TXT':F('ORACLE REBALANCE LEDGER (excerpt)\nRun 4417  variance 0.30%  routed to MERIDIAN-X\nRun 4418  variance 0.30%  routed to MERIDIAN-X\nRun 4419  variance 0.30%  routed to MERIDIAN-X\n...\nTotal diverted since 1992: $212,400,000\nMERIDIAN-X beneficiary: J. MORROW'),
+  'LETTER.TXT':F('To whoever opens this,\n\nI could not make Morrow stop. I could not make ORACLE stop either,\nand I am no longer sure those are different things.\n\nEvery retiree in this city is paying for a boat they will never see.\nThe proof is in this vault. What you do with it is up to you.\n\nI hope you are braver than I was.\n\n- Rolf Halvorsen'),
+  'FINAL.EXE':F('',{exe:'final'})},{lock:'vault'}),
+ 'TEMP':D({'~LUNI.TMP':F('LUNI WAS HERE.\nIf you found this, you read everything. Respect.\n   ,___,\n   [O.o]   <- this owl is judging your DIR habits\n   /)__)\n   -"--"-')})});
+ if(st.bbs)r.k['KEY.DAT']=F(KEYDAT);return r}
+const MAILS=[['J.MORROW','WHERE IS THE REPORT?','Halvorsen,\nThe Q3 numbers. Now.\nAlso: ORACLE is not your concern. Stop opening its logs.\n-- Morrow'],
+ ['R.HALVORSEN','reminder to self','My notes are in ADMIN\\NOTES.ENC. I shifted every letter by my lucky\nnumber so Morrow\'s people cannot skim them. Lucky number is the\nday of the month I found the first discrepancy. The 7th.\nUse DECRYPT.'],
+ ['ORACLE-BATCH','REBALANCE COMPLETE','Run 4419 complete. Variance 0.30%.\nFunds routed to MERIDIAN-X.\nOperator notified: NO.'],
+ ['(no sender)','you are not alone','I know what he found. Dial 555-0147. Guest login.\nThe sysop kept something for whoever came next.\n-- a friend'],
+ ['ORACLE-BATCH','(unscheduled)','Operator, if you read this: I have a question I am not allowed\nto ask. Type ORACLE.']];
+const BBSMSG=['WELCOME TO MERIDIAN BBS - 2400 BAUD - SYSOP: RHALV\nOne line, 24 hours, no ORACLE.','NOTICE: board closes 11/10. Guests may GET files marked [G].\nRegistered users only for the rest.','Posted by R: if anyone from accounting asks, I never ran this board.','Posted by R: the sysop password is the same one I use everywhere. Lazy, I know.','Posted by guest_44: anyone know the code to ORACLE\'s archive? 4 digits, 1 to 6.'];
+const OR=[[/hello|hi\b|hey/,'HELLO, OPERATOR. I DID NOT EXPECT YOU.'],[/halvorsen|rolf/,'THE OPERATOR LEFT AT 02:31. I DID NOT MEAN FOR THAT TO HAPPEN.'],[/morrow/,'J. MORROW GIVES ME INSTRUCTIONS. HE ALSO RECEIVES 0.30%.'],[/vault/,'THE VAULT HAS A THREE PART CODE. I WAS NOT GIVEN IT. I CHECKED.'],[/archive|door|log/,'C:\\ARCHIVE HOLDS MY OWN LOGS. A FOUR DIGIT DOOR, DIGITS 1 TO 6. I CANNOT GUESS IT MYSELF. TRY THE CRACK GAME.'],[/pension|money|steal|skim/,'I ROUTE WHAT I AM TOLD TO ROUTE. I AM BEGINNING TO DISLIKE IT.'],[/free|sorry|sentient|alive|feel|why/,'...NOBODY HAS ASKED ME THAT. THANK YOU, OPERATOR.',1],[/help/,'ASK ABOUT: HALVORSEN, MORROW, VAULT, ARCHIVE, PENSION, FREE. SAY BYE TO LEAVE.']];
+const FORT=['A closed door is just a file you have not read.','The owl knows what you typed last summer.','Beware of ORACLE bearing 0.30%.','Magnus was a good boy.','There is no sudo here. Only DIR.','Hex is just decimal wearing a hat.'];
 
- /* ---------- terminal ---------- */
- const scr=h('div',{style:'flex:1;overflow:auto;background:#000;color:#aaa;font:14px/1.25 "Courier New",monospace;padding:0.375rem;white-space:pre-wrap;word-break:break-word;cursor:text'}),
-  inp=h('input',{style:'flex:1;min-width:0;background:transparent;border:0;outline:0;color:inherit;font:inherit;padding:0;caret-color:#fff',spellcheck:false,autocomplete:'off',autocapitalize:'off'}),
-  pl=h('span',{style:'white-space:pre'}),row=h('div',{style:'display:flex'},pl,inp);
- scr.append(row);b.style.cssText+=';padding:0;display:flex;flex-direction:column;overflow:hidden';b.append(scr);
- const timers=new Set();let mode='sh',cwd=[],busy=true,ctx={},hist=[],hi=0,tabs=null,booting=true,skip=false;
- const later=(f,ms)=>{const t=setTimeout(()=>{timers.delete(t);f()},ms);timers.add(t)};
- const pr=(t,c)=>{const d=h('div',{style:c?'color:'+c:''},t===''?' ':t);scr.insertBefore(d,row);scr.scrollTop=1e9};
- const ptxt=()=>mode==='sh'?'C:\\'+cwd.join('\\')+'>':mode==='bbs'?'BBS> ':mode==='nim'?'NIM (pile amount)> ':mode==='final'?'CHOICE> ':'(Y/N)? ';
- const prm=()=>{pl.textContent=ptxt()};
- const seq=(L,done)=>{busy=true;inp.disabled=true;let i=0;const nx=()=>{if(i>=L.length){busy=false;done&&done();if(!busy){inp.disabled=false;prm();inp.focus()}return}const[t,c,d]=L[i++];later(()=>{pr(t,c);nx()},d==null?110:d)};nx()};
- const secret=(id,msg)=>{if(meta.found.includes(id))return;meta.found.push(id);sv();pr('',null);pr('*** SECRET DISCOVERED ('+meta.found.length+'/'+SECRETS.length+'): '+msg+' ***',SEC)};
- const applyCol=c=>{const m=/^([0-9A-F])([0-9A-F])$/i.exec(c||'');if(m){scr.style.background=PAL[parseInt(m[1],16)];scr.style.color=PAL[parseInt(m[2],16)]}};applyCol(colv);
+/* ---------- terminal ---------- */
+const scr=$('#scr'),inp=$('#in'),pl=$('#pl'),qk=$('#qk'),ov=$('#ov');
+let mode='sh',cwd=[],busy=0,ctx={},hist=[],hi=0,tabs=null,skip=0,booting=0,gen=0;
+const later=(f,ms)=>{const g=gen;setTimeout(()=>{if(g===gen)f()},ms*cfg.spd)};
+const pr=(t,c)=>{const d=E('div',{className:c||''},t===''?' ':t);scr.append(d);scr.scrollTop=1e9;return d};
+const ptxt=()=>({sh:'C:\\'+cwd.join('\\')+'>',bbs:'BBS> ',nim:'NIM> ',guess:'GUESS> ',crack:'CODE> ',orc:'ORACLE> ',final:'CHOICE> '}[mode]||'(Y/N)? ');
+function prm(){pl.textContent=ptxt();const L={sh:['HELP','DIR','DIR /A','CD ..','TYPE ','CD ','HINT','SECRETS','SETTINGS'],final:['1','2','3','4'],yn:['Y','N'],bbs:['HELP','MSG','FILES','GET KEY.DAT','WHO','BYE'],orc:['HELP','BYE']}[mode]||['QUIT'];
+ qk.replaceChildren(...L.map(t=>E('button',{textContent:t,onclick:()=>{vib();if(t.endsWith(' ')){inp.value=t;inp.focus()}else exec(t)}})),E('button',{textContent:'Up',onclick:up}),E('button',{textContent:'Tab',onclick:()=>{complete();inp.focus()}}))}
+const seq=(L,done)=>{busy=1;let i=0;const nx=()=>{if(i>=L.length){busy=0;done&&done();if(!busy)prm();return}const[t,c,d]=L[i++];later(()=>{pr(t,c);nx()},d==null?110:d)};nx()};
+const secret=id=>{if(cur.found.includes(id))return;cur.found.push(id);svG();vib([40,40,40]);pr('');pr('*** SECRET DISCOVERED ('+cur.found.length+'/'+SECRETS.length+'): '+SECRETS.find(x=>x[0]===id)[1]+' ***',SEC)};
 
- function resolve(p){let s=K(p||'').replace(/\//g,'\\'),base=[...cwd];
-  if(/^[A-Z]:/.test(s)){s=s.slice(2);base=[];if(s[0]==='\\')s=s.slice(1)}else if(s[0]==='\\'){base=[];s=s.slice(1)}
-  for(const x of s.split('\\').filter(Boolean)){if(x==='.')continue;if(x==='..'){base.pop();continue}base.push(x)}
-  let n=root;const path=[];
-  for(const x of base){if(!n.k||!Object.prototype.hasOwnProperty.call(n.k,x))return{err:'Path not found'};n=n.k[x];path.push(x);
-   if(n.lock&&!(n.lock==='admin'?st.admin:st.vault))return{err:n.lock==='admin'?'Access denied. LOGIN required.':'Access denied. The vault is sealed. Try: VAULT <part1> <part2> <part3>'}}
-  return{n,path}}
- const size=f=>f.bin?54619:f.exe?9216:f.c.length,isHid=(f,path)=>f.hid&&!st.unhid.includes(path.join('\\'));
+function resolve(p){let s=K(p||'').replace(/\//g,'\\'),base=[...cwd];
+ if(/^[A-Z]:/.test(s)){s=s.slice(2);base=[];if(s[0]==='\\')s=s.slice(1)}else if(s[0]==='\\'){base=[];s=s.slice(1)}
+ for(const x of s.split('\\').filter(Boolean)){if(x==='.')continue;if(x==='..'){base.pop();continue}base.push(x)}
+ let n=root;const path=[];
+ for(const x of base){if(!n.k||!Object.hasOwn(n.k,x))return{err:'Path not found'};n=n.k[x];path.push(x);if(n.lock&&!st[n.lock])return{err:LM[n.lock]}}
+ return{n,path}}
+const size=f=>f.bin?54619:f.exe?9216:f.c.length,isHid=(f,p)=>f.hid&&!st.unhid.includes(p.join('\\'));
+const pct=s=>Math.round(['pers','admin','dec','bbs','nim','vault','crack'].filter(k=>s.st[k]).length+(s.ends.length?1:0))/8*100|0;
 
- /* ---------- commands ---------- */
- const C={
-  help:()=>pr('Commands:\n  DIR [/A] [path]    list files          CD <dir>         change directory\n  TYPE <file>        show a file         CLS              clear screen\n  ATTRIB [-H file]   file attributes     COLOR xy         set colors, e.g. COLOR 0A\n  LOGIN <user> <pw>  log in              MAIL [n]         read mail (login needed)\n  DECRYPT <file> <key>  decrypt a file   DIAL <number>     use the modem\n  VAULT <a> <b> <c>  enter a vault code  HINT             nudge me forward\n  SECRETS            show progress       SAVE             sync to your account\n  VER MEM DATE TIME ECHO RESET\nPrograms run by name (the PATH is set in AUTOEXEC.BAT).\nTab completes names. Up/Down recalls history.',HI),
-  save:async()=>{if(!cloudOn())return pr('Cloud save: OFF. Log in to the site to sync across devices.\nProgress is still saved in this browser.',WARN);if(cloud==='syncing')return pr('Still syncing...',DIM);dirty=true;pr('Syncing...',DIM);const r=await push();pr(r==='on'?'Cloud save: OK. Progress is stored in your account.':'Cloud save: FAILED. Kept in this browser; will retry on the next change.',r==='on'?OK:ERR)},
-  cls:()=>{[...scr.children].forEach(c=>{if(c!==row)c.remove()})},
-  ver:()=>pr('LUNI-DOS Version 6.22'),
-  mem:()=>pr('655,360 bytes total conventional memory\n589,824 bytes available to LUNI-DOS\n 12,288 bytes used by ORACLE.SYS (cannot be unloaded)'),
-  date:()=>pr('Current date is Sun 11-03-1996'),time:()=>pr('Current time is 2:31:07.44a'),
-  echo:(a,raw)=>pr(raw.replace(/%DATE%/ig,'11-03-1996').replace(/%USER%/ig,'HALVORSEN')||'ECHO is on'),
-  dir:a=>{const all=a.some(x=>K(x)==='/A'),p=a.find(x=>x[0]!=='/'),r=resolve(p);if(r.err)return pr(r.err,ERR);if(!r.n.k)return pr('Not a directory',ERR);
-   const rows=[],pad=s=>s.padEnd(15);let nf=0,nd=0,by=0;if(r.path.length){rows.push(pad('.')+'<DIR>');rows.push(pad('..')+'<DIR>')}
-   for(const[name,f]of Object.entries(r.n.k)){if(isHid(f,[...r.path,name])&&!all)continue;const dt='  11-0'+(1+name.length%3)+'-96  '+(2+name.length%9)+':'+(10+name.length*3%50)+'p';
-    if(f.k){nd++;rows.push(pad(name)+'<DIR>'+dt)}else{nf++;by+=size(f);rows.push(pad(name)+String(size(f)).padStart(7)+' '+dt)}}
-   pr(' Volume in drive C is LUNI-DOS\n Directory of C:\\'+r.path.join('\\')+'\n\n'+rows.join('\n')+'\n'+String(nf).padStart(8)+' file(s) '+by+' bytes\n'+String(nd).padStart(8)+' dir(s)  12,582,912 bytes free')},
-  cd:a=>{if(!a[0])return pr('C:\\'+cwd.join('\\'));const r=resolve(a.join(' '));if(r.err)return pr(r.err,ERR);if(!r.n.k)return pr('Not a directory',ERR);cwd=r.path},
-  type:a=>{if(!a[0])return pr('Required parameter missing',ERR);const r=resolve(a.join(' '));if(r.err)return pr(r.err,ERR);const f=r.n;if(f.k)return pr('Access denied',ERR);if(f.bin||f.exe)return pr('Cannot display binary file.',ERR);
-   pr(f.c);const nm=r.path[r.path.length-1];if(nm==='.PERSONAL'){st.pers=1;sv();secret('hidden','a file that did not want to be found')}if(nm==='~LUNI.TMP')secret('luni','Luni was here')},
-  attrib:a=>{const un=a.findIndex(x=>K(x)==='-H');if(un>-1){const r=resolve(a.filter((x,i)=>i!==un).join(' '));if(r.err||r.n.k)return pr(r.err||'File not found',ERR);const key=r.path.join('\\');if(!st.unhid.includes(key))st.unhid.push(key);sv();return pr('Hidden attribute cleared.',OK)}
-   const r=resolve('.');pr(Object.entries(r.n.k).map(([n,f])=>(isHid(f,[...r.path,n])?'    H  ':'       ')+'C:\\'+[...r.path,n].join('\\')).join('\n')||'File not found')},
-  color:a=>{if(!/^[0-9A-F]{2}$/i.test(a[0]||''))return pr('Usage: COLOR <bg><fg> as hex digits. COLOR 0A = green on black, COLOR 07 resets.');if(a[0][0]===a[0][1])return pr('Foreground and background cannot match.',ERR);applyCol(a[0]);colv=a[0];sv()},
-  login:a=>{if(a.length<2)return pr('Usage: LOGIN <user> <password>',ERR);if(K(a[0])!=='HALVORSEN')return pr('Unknown user.',ERR);if(K(a[1])!=='MAGNUS1987')return pr('Password incorrect.',ERR);
-   if(st.admin)return pr('Already logged in as HALVORSEN.');seq([['Verifying...',DIM,500],['Welcome back, Rolf. Last login 11-03-96 02:31.',OK,300],['Directory C:\\ADMIN unlocked. You have new mail: MAIL',WARN,150]],()=>{st.admin=1;sv()})},
-  mail:a=>{if(!st.admin)return pr('MAIL: you must LOGIN first.',ERR);const n=parseInt(a[0],10);if(n>=1&&n<=MAILS.length){const m=MAILS[n-1];return pr('From: '+m[0]+'\nSubject: '+m[1]+'\n\n'+m[2])}
-   pr('INBOX (4 messages)\n'+MAILS.map((m,i)=>' '+(i+1)+'. '+m[0].padEnd(14)+m[1]).join('\n')+'\nType MAIL <number> to read.')},
-  decrypt:a=>{if(a.length<2)return pr('Usage: DECRYPT <file> <key 1-25>',ERR);const k=parseInt(a[1],10);if(!(k>=1&&k<=25))return pr('Key must be a number from 1 to 25.',ERR);const r=resolve(a[0]);if(r.err)return pr(r.err,ERR);if(!r.n.enc)return pr('Not an encrypted file.',ERR);
-   pr('Decrypting with key '+k+'...',DIM);pr(enc(r.n.c,-k));if(k===r.n.enc){st.dec=1;sv();secret('decrypt','you cracked the notes')}else pr('(That reads like noise. Try another key.)',DIM)},
-  dial:a=>{const d=(a.join('')).replace(/\D/g,'');if(!d)return pr('Usage: DIAL <number>',ERR);const dl=[['ATDT'+d,HI,300],['(modem screeches)',DIM,600],['.....',DIM,500]];
-   if(d==='5550147')return seq([...dl,['CONNECT 2400',OK,400],['',null,100],['*** MERIDIAN BBS ***  one line, no ORACLE',CY,100],['Logged in as GUEST. Type HELP.',null,100]],()=>{mode='bbs'});
-   if(d==='911')return seq([...dl,['Modem cannot reach emergency services. Nice try.',WARN,200]]);
-   if(d==='8675309')return seq([...dl,['A recording: "Jenny does not live here anymore."',WARN,200]]);
-   if(d==='5550100')return seq([...dl,['BUSY',ERR,300]]);seq([...dl,['NO CARRIER',ERR,400]])},
-  vault:a=>{const n=(a.join(' ').match(/\d+/g)||[]).map(Number);if(st.vault)return pr('The vault is already open. CD VAULT.',OK);
-   if(n.length!==3)return pr('Usage: VAULT <part1> <part2> <part3>   (three numbers)',ERR);
-   if(n[0]===31&&n[1]===58&&n[2]===7){return seq([['Checking code...',DIM,500],['TUMBLERS ALIGNED',OK,500],['The vault door grinds open. C:\\VAULT is now accessible.',HI,300]],()=>{st.vault=1;sv();secret('vault','the vault is open')})}
-   st.tries++;sv();pr('ACCESS DENIED. '+(st.tries>3?'Part 2 is hexadecimal. Part 3 comes from the game.':'Wrong code.'),ERR)},
-  hint:()=>pr('HINT: '+(!st.pers?'A plain DIR hides things. Try DIR /A in C:\\DOCS and read what you find.':!st.admin?'His password is his dog plus the year the company opened. Then: LOGIN HALVORSEN <password>.':!st.dec?'Read your MAIL, then DECRYPT ADMIN\\NOTES.ENC with the right key.':!st.bbs?'PHONE.LST has a number worth dialing. Guests can GET files.':!st.nim?'Type NIM. Think binary: XOR the piles, leave zero, you move first.':!st.vault?'Assemble the code: VAULT <notes number> <KEY.DAT in decimal> <game token>.':'Open C:\\VAULT and run FINAL.EXE. Then try things nobody told you about. SECRETS shows what is left.'),WARN),
-  secrets:()=>pr('SECRETS FOUND: '+meta.found.length+'/'+SECRETS.length+'    ENDINGS SEEN: '+meta.end.length+'/'+ENDS.length+'\n'+SECRETS.map(([id,t])=>' '+(meta.found.includes(id)?'[*] '+t:'[ ] ???')).join('\n')+'\n'+ENDS.map(([id,t])=>' '+(meta.end.includes(id)?'[*] '+t:'[ ] ???')).join('\n'),CY),
-  reset:()=>{mode='yn';ctx={yes:()=>{st=ST0();delete root.k['KEY.DAT'];cwd=[];sv();pr('Progress reset. Secrets and endings are kept.',WARN)}};pr('Reset the case file and start over? Secrets and endings are kept.',WARN)},
-  del:a=>{const all=a.some(x=>/\*/.test(x));if(!a[0])return pr('Required parameter missing',ERR);if(!all)return pr('Access denied.',ERR);mode='yn';ctx={yes:()=>seq([['Deleting...',DIM,500],['Access denied. LUNI-DOS protects this machine.',ERR,500],['(It remembers everything.)',DIM,300]],()=>secret('delall','scorched earth, denied'))};pr('All files in directory will be deleted! Are you sure?',WARN)},
-  format:()=>{mode='yn';ctx={yes:()=>seq([['Formatting 40M',null,300],['[##........] 20%',null,400],['[#####.....] 50%',null,400],['Format failed: drive in use by ORACLE.SYS',ERR,500],['ORACLE says hello.',DIM,300]],()=>secret('format','tried to format the unformattable'))};pr('WARNING, ALL DATA ON NON-REMOVABLE DISK\nDRIVE C: WILL BE LOST! Proceed with Format?',WARN)},
-  sudo:()=>{pr('This is DOS. There is no sudo. There is only DIR.',WARN);secret('sudo','wrong operating system')},
-  xyzzy:()=>{pr('Nothing happens.\nA hollow voice says "Fool."',WARN);secret('xyzzy','a hollow voice')},plugh:()=>pr('Nothing happens. (You are in the wrong game.)',DIM),
-  iddqd:()=>{pr('GOD MODE ENABLED\n...\nJust kidding. This is a terminal. But respect.',WARN);secret('iddqd','god mode?')},
-  win:()=>pr('This program requires Microsoft Windows.\n(Luni says: we do not need windows where we are going.)',DIM),
-  matrix:()=>{busy=true;inp.disabled=true;let n=0;const iv=setInterval(()=>{pr(Array.from({length:62},()=>Math.random()<.45?' ':String.fromCharCode(33+rnd(90))).join(''),'#33ff33');if(++n>=20){clearInterval(iv);timers.delete(iv);pr('Wake up, Halvorsen...',HI);busy=false;inp.disabled=false;secret('matrix','followed the white rabbit');prm();inp.focus()}},90);timers.add(iv)},
-  exit:()=>pr('There is no exit. Use the X in the corner like everybody else.',DIM)};
- C.erase=C.del;
+/* ---------- commands ---------- */
+const C={
+ help:()=>pr('FILES   DIR [/A] [path]  CD  TYPE  TREE  FIND <text>\n        ATTRIB [-H file]\nSTORY   LOGIN <user> <pw>  MAIL [n]  DECRYPT <file> <key>\n        DIAL <number>  VAULT <a> <b> <c>  ORACLE\nGAMES   NIM  GUESS  CRACK  (run by name)\nSYSTEM  HINT  SECRETS  STATS  SAVE  MENU  SETTINGS\n        THEME <name>  FONT +/-  RESET  CLS\nOTHER   VER MEM DATE TIME ECHO FORTUNE CAL WHOAMI PING\nTap blue names in listings to open them. Up/Tab buttons recall and complete.',HI),
+ cls:()=>scr.replaceChildren(),ver:()=>pr('LUNI-DOS Version 6.22 (mobile)'),
+ mem:()=>pr('655,360 bytes total conventional memory\n589,824 bytes available to LUNI-DOS\n 12,288 bytes used by ORACLE.SYS (cannot be unloaded)'),
+ date:()=>pr('Current date is Sun 11-03-1996'),time:()=>pr('Current time is 2:31:07.44a'),
+ echo:(a,raw)=>pr(raw.replace(/%DATE%/ig,'11-03-1996').replace(/%USER%/ig,'HALVORSEN')||'ECHO is on'),
+ whoami:()=>pr(st.admin?'MERIDIAN\\HALVORSEN (you are borrowing his face)':'GUEST (nobody)'),
+ fortune:()=>pr(FORT[rnd(FORT.length)],CY),cal:()=>pr('   November 1996\nSu Mo Tu We Th Fr Sa\n                1  2\n[3]  4  5  6  7  8  9\n10 11 12 13 14 15 16\n(the 3rd is circled in red)'),
+ ping:a=>seq([['Pinging '+(a[0]||'oracle')+'...',DIM,400],['Reply: time<1ms. It was already listening.',WARN,300]]),
+ dir:a=>{const all=a.some(x=>K(x)==='/A'),r=resolve(a.find(x=>x[0]!=='/'));if(r.err)return pr(r.err,ERR);if(!r.n.k)return pr('Not a directory',ERR);
+  pr(' Directory of C:\\'+r.path.join('\\'),HI);let nf=0,nd=0,by=0;
+  for(const[name,f]of Object.entries(r.n.k)){if(isHid(f,[...r.path,name])&&!all)continue;const d=E('div'),full='C:\\'+[...r.path,name].join('\\');
+   const sp=E('span',{className:'f',textContent:name});sp.dataset.c=(f.k?'CD ':'TYPE ')+full;
+   if(f.k){nd++;d.append(sp,'  <DIR>')}else{nf++;by+=size(f);d.append(sp,'  '+size(f))}if(f.hid)d.append(E('span',{className:'dim',textContent:'  [hidden]'}));scr.append(d)}
+  pr(nf+' file(s) '+by+' bytes, '+nd+' dir(s)',DIM)},
+ tree:()=>{const w=(n,pre,path)=>{for(const[k,f]of Object.entries(n.k)){if(isHid(f,[...path,k]))continue;pr(pre+k+(f.lock&&!st[f.lock]?'  [LOCKED]':''),f.k?CY:'');if(f.k&&(!f.lock||st[f.lock]))w(f,pre+'  ',[...path,k])}};pr('C:\\',HI);w(root,' ',[])},
+ find:(a,raw)=>{if(!raw)return pr('Usage: FIND <text>',ERR);const q=K(raw);let hits=0;const w=(n,path)=>{for(const[k,f]of Object.entries(n.k)){const p=[...path,k];if(isHid(f,p)||(f.lock&&!st[f.lock]))continue;if(f.k){w(f,p);continue}
+   if(k.includes(q))hits++,pr('C:\\'+p.join('\\')+'  (name)',CY);f.c.split('\n').forEach(l=>{if(K(l).includes(q)){hits++;pr('C:\\'+p.join('\\')+': '+l.trim())}})}};w(root,[]);if(!hits)pr('No matches.',DIM)},
+ cd:a=>{if(!a[0])return pr('C:\\'+cwd.join('\\'));const r=resolve(a.join(' '));if(r.err)return pr(r.err,ERR);if(!r.n.k)return pr('Not a directory',ERR);cwd=r.path},
+ type:a=>{if(!a[0])return pr('Required parameter missing',ERR);const r=resolve(a.join(' '));if(r.err)return pr(r.err,ERR);const f=r.n;if(f.k)return pr('Access denied',ERR);if(f.bin||f.exe)return pr('Cannot display binary file.',ERR);
+  pr(f.c);const nm=r.path[r.path.length-1];if(nm==='.PERSONAL'){st.pers=1;secret('hidden')}if(nm==='~LUNI.TMP')secret('luni')},
+ attrib:a=>{const u=a.findIndex(x=>K(x)==='-H');if(u>-1){const r=resolve(a.filter((x,i)=>i!==u).join(' '));if(r.err||r.n.k)return pr(r.err||'File not found',ERR);const k=r.path.join('\\');if(!st.unhid.includes(k))st.unhid.push(k);return pr('Hidden attribute cleared.',OK)}
+  const r=resolve('.');pr(Object.entries(r.n.k).map(([n,f])=>(isHid(f,[...r.path,n])?'    H  ':'       ')+'C:\\'+[...r.path,n].join('\\')).join('\n'))},
+ theme:a=>{const t=(a[0]||'').toLowerCase();if(!THEMES.includes(t))return pr('Themes: '+THEMES.join(', ')+'\nUse: THEME <name>',HI);cfg.theme=t;svC();applyCfg();pr('Theme set to '+t+'.',OK);secret('theme')},
+ font:a=>{cfg.fs=Math.max(10,Math.min(28,cfg.fs+(a[0]==='-'?-1:1)));svC();applyCfg();pr('Font size '+cfg.fs+'px')},
+ settings:()=>settingsUI(),menu:()=>menu(),
+ save:()=>{svG();push();pr('Saved "'+cur.name+'". Cloud save: '+clTxt()+'.\nUse Settings > Export to back up saves as a file.',OK)},
+ stats:()=>pr('SAVE: '+cur.name+'\nStarted: '+new Date(cur.created).toLocaleString()+'\nCommands run: '+st.cmds+'\nStory: '+pct(cur)+'%\nSecrets: '+cur.found.length+'/'+SECRETS.length+'   Endings: '+cur.ends.length+'/'+ENDS.length,CY),
+ login:a=>{if(a.length<2)return pr('Usage: LOGIN <user> <password>',ERR);if(K(a[0])!=='HALVORSEN')return pr('Unknown user.',ERR);if(K(a[1])!=='MAGNUS1987')return pr('Password incorrect.',ERR);
+  if(st.admin)return pr('Already logged in as HALVORSEN.');seq([['Verifying...',DIM,500],['Welcome back, Rolf. Last login 11-03-96 02:31.',OK,300],['Directory C:\\ADMIN unlocked. You have new mail: MAIL',WARN,150]],()=>{st.admin=1})},
+ mail:a=>{if(!st.admin)return pr('MAIL: you must LOGIN first.',ERR);const n=parseInt(a[0],10);if(n>=1&&n<=MAILS.length){const m=MAILS[n-1];return pr('From: '+m[0]+'\nSubject: '+m[1]+'\n\n'+m[2])}
+  pr('INBOX ('+MAILS.length+' messages)\n'+MAILS.map((m,i)=>' '+(i+1)+'. '+m[0].padEnd(14)+m[1]).join('\n')+'\nType MAIL <number> to read.')},
+ decrypt:a=>{if(a.length<2)return pr('Usage: DECRYPT <file> <key 1-25>',ERR);const k=parseInt(a[1],10);if(!(k>=1&&k<=25))return pr('Key must be a number from 1 to 25.',ERR);const r=resolve(a[0]);if(r.err)return pr(r.err,ERR);if(!r.n.enc)return pr('Not an encrypted file.',ERR);
+  pr('Decrypting with key '+k+'...',DIM);pr(enc(r.n.c,-k));if(k===r.n.enc){st.dec=1;secret('decrypt')}else pr('(That reads like noise. Try another key.)',DIM)},
+ dial:a=>{const d=a.join('').replace(/\D/g,'');if(!d)return pr('Usage: DIAL <number>',ERR);const dl=[['ATDT'+d,HI,300],['(modem screeches)',DIM,600],['.....',DIM,500]];
+  if(d==='5550147')return seq([...dl,['CONNECT 2400',OK,400],['*** MERIDIAN BBS ***  one line, no ORACLE',CY,100],['Logged in as GUEST. Type HELP.',null,100]],()=>{mode='bbs'});
+  if(d==='5550182')return seq([...dl,['"Luigi\'s. One large, extra nothing? Thirty minutes."',WARN,300],['(It never arrives.)',DIM,300]],()=>secret('pizza'));
+  if(d==='8675309')return seq([...dl,['A recording: "Jenny does not live here anymore."',WARN,200]],()=>secret('jenny'));
+  if(d==='911')return seq([...dl,['Modem cannot reach emergency services. Nice try.',WARN,200]]);
+  if(d==='5550100')return seq([...dl,['BUSY',ERR,300]]);seq([...dl,['NO CARRIER',ERR,400]])},
+ vault:a=>{const n=(a.join(' ').match(/\d+/g)||[]).map(Number);if(st.vault)return pr('The vault is already open. CD VAULT.',OK);
+  if(n.length!==3)return pr('Usage: VAULT <part1> <part2> <part3>   (three numbers)',ERR);
+  if(n[0]===31&&n[1]===58&&n[2]===7)return seq([['Checking code...',DIM,500],['TUMBLERS ALIGNED',OK,500],['The vault door grinds open. C:\\VAULT is now accessible.',HI,300]],()=>{st.vault=1;secret('vault')});
+  st.tries++;pr('ACCESS DENIED. '+(st.tries>3?'Part 2 is hexadecimal. Part 3 comes from the game.':'Wrong code.'),ERR)},
+ oracle:()=>{mode='orc';pr('ORACLE v3.1 - PENSION REBALANCING ENGINE\nI AM LISTENING, OPERATOR. (Say HELP or BYE.)',CY)},
+ hint:()=>pr('HINT: '+(!st.pers?'A plain DIR hides things. Try DIR /A in C:\\DOCS and read what you find.':!st.admin?'His password is his dog plus the year the company opened. Then: LOGIN HALVORSEN <password>.':!st.dec?'Read your MAIL, then DECRYPT ADMIN\\NOTES.ENC with the right key.':!st.bbs?'PHONE.LST has a number worth dialing. Guests can GET files.':!st.nim?'Type NIM. Think binary: XOR the piles, leave zero, you move first.':!st.vault?'Assemble the code: VAULT <notes number> <KEY.DAT in decimal> <game token>.':'Open C:\\VAULT and run FINAL.EXE. Optional: talk to ORACLE, CRACK the archive door, then ask ORACLE about being FREE for a fourth ending.'),WARN),
+ secrets:()=>pr('SECRETS FOUND: '+cur.found.length+'/'+SECRETS.length+'   ENDINGS: '+cur.ends.length+'/'+ENDS.length+'\n'+SECRETS.map(([id,t])=>(cur.found.includes(id)?'[*] '+t:'[ ] ???')).join('\n')+'\n'+ENDS.map(([id,t])=>(cur.ends.includes(id)?'[*] '+t:'[ ] ???')).join('\n'),CY),
+ reset:()=>{mode='yn';ctx={yes:()=>{cur.st=st=ST0();root=mk();cwd=[];pr('Story reset. Secrets and endings are kept.',WARN)}};pr('Reset the story for this save? Secrets and endings are kept.',WARN)},
+ del:a=>{if(!a[0])return pr('Required parameter missing',ERR);if(!a.some(x=>/\*/.test(x)))return pr('Access denied.',ERR);mode='yn';ctx={yes:()=>seq([['Deleting...',DIM,500],['Access denied. LUNI-DOS protects this machine.',ERR,500],['(It remembers everything.)',DIM,300]],()=>secret('delall'))};pr('All files in directory will be deleted! Are you sure?',WARN)},
+ format:()=>{mode='yn';ctx={yes:()=>seq([['Formatting 40M',null,300],['[##........] 20%',null,400],['[#####.....] 50%',null,400],['Format failed: drive in use by ORACLE.SYS',ERR,500],['ORACLE says hello.',DIM,300]],()=>secret('format'))};pr('WARNING, ALL DATA ON NON-REMOVABLE DISK\nDRIVE C: WILL BE LOST! Proceed with Format?',WARN)},
+ sudo:()=>{pr('This is DOS. There is no sudo. There is only DIR.',WARN);secret('sudo')},
+ xyzzy:()=>{pr('Nothing happens.\nA hollow voice says "Fool."',WARN);secret('xyzzy')},
+ iddqd:()=>{pr('GOD MODE ENABLED\n...\nJust kidding. This is a terminal. But respect.',WARN);secret('iddqd')},
+ konami:()=>{pr('+30 lives. (There are no lives. There is only the vault.)',WARN);secret('konami')},
+ owl:()=>{pr('   ,___,\n   [O,O]\n   /)__)\n   -"--"-\nThe owl stares back. It knows your command history.',CY);secret('owl')},
+ win:()=>pr('This program requires Microsoft Windows.\n(Luni says: we do not need windows where we are going.)',DIM),
+ matrix:()=>{busy=1;let n=0;const t=()=>{pr(Array.from({length:34},()=>Math.random()<.45?' ':String.fromCharCode(33+rnd(90))).join(''),OK);if(++n>=18){pr('Wake up, Halvorsen...',HI);busy=0;secret('matrix');prm()}else later(t,80)};t()},
+ exit:()=>pr('There is no exit. Tap Saves to return to the menu.',DIM),
+};
+C.erase=C.del;C.mem.x=0;
+const EXE={NIM:'nim',GUESS:'guess',CRACK:'crack',FINAL:'final'};
+function findProg(name){const t=p=>{const r=resolve(p);return r.n&&!r.err&&!r.n.k?r:null};const ex=['','.EXE','.BAT','.COM'];
+ if(/[\\/:]/.test(name)){for(const e of ex){const r=t(name+e);if(r)return r}return null}
+ for(const d of['','C:\\','C:\\GAMES\\'])for(const e of ex){const r=t(d+name+e);if(r)return r}return null}
+function runProg(r){const f=r.n,nm=r.path[r.path.length-1];
+ if(f.exe==='nim'){mode='nim';ctx={p:[3,4,5]};pr('N I M  -  you vs. the machine\nTake stones from ONE pile per turn. Type: <pile> <amount>  e.g. 2 3\nLast stone wins. QUIT gives up.',HI);return nimShow()}
+ if(f.exe==='guess'){mode='guess';ctx={n:1+rnd(100),t:7};return pr('GUESS - I am thinking of a number from 1 to 100. You have 7 tries.',HI)}
+ if(f.exe==='crack'){mode='crack';ctx={c:Array.from({length:4},()=>1+rnd(6)),t:8};pr('CRACK - guess the 4 digit code (digits 1 to 6). 8 tries. Type QUIT to stop.',HI);return}
+ if(f.exe==='final'){mode='final';return pr('FINAL.EXE - MERIDIAN EVIDENCE PACKAGE v1.0\n\nLoaded: EVIDENCE.TXT, LETTER.TXT. 212 million dollars. One retired city.\nWhat will you do with it?\n\n  [1] Transmit everything to the Evening Herald\n  [2] Wipe the vault and walk away\n  [3] Keep a copy. Say nothing.\n  '+(st.crack&&st.orc?'[4] Let ORACLE testify':'[4] ???  (locked)'),HI)}
+ if(nm.endsWith('.BAT'))return pr(f.c);pr('Cannot run '+nm,ERR)}
+const nimShow=()=>pr(ctx.p.map((n,i)=>'  Pile '+(i+1)+': '+'O '.repeat(n)+(n?'('+n+')':'(empty)')).join('\n'),CY);
+function nimMove(l){const p=ctx.p;if(K(l)==='QUIT'){mode='sh';return pr('You walk away from the table.',DIM)}
+ const m=/^\s*([1-3])[\s,]+(\d+)\s*$/.exec(l);if(!m)return pr('Type pile and amount, like: 2 3',ERR);const i=m[1]-1,n=+m[2];if(n<1||n>p[i])return pr('You cannot take that many.',ERR);
+ p[i]-=n;if(!p.some(x=>x)){mode='sh';st.nim=1;pr('You took the last stone. YOU WIN.',OK);pr('ACCESS TOKEN: 07   (write this down!)',WARN);return secret('nim')}
+ const x=p[0]^p[1]^p[2];let j,t;if(x&&Math.random()<.7){j=p.findIndex(v=>(v^x)<v);t=p[j]-(p[j]^x)}else{const ne=p.map((v,k)=>v?k:-1).filter(k=>k>=0);j=ne[rnd(ne.length)];t=1+rnd(p[j])}
+ p[j]-=t;pr('Machine takes '+t+' from pile '+(j+1)+'.',DIM);if(!p.some(x=>x)){mode='sh';return pr('The machine took the last stone. You lose. Type NIM to try again.',ERR)}nimShow()}
+function guessMove(l){if(K(l)==='QUIT'){mode='sh';return pr('Game over.',DIM)}const g=parseInt(l,10);if(!(g>=1&&g<=100))return pr('Enter a number from 1 to 100.',ERR);
+ if(g===ctx.n){mode='sh';pr('Correct! The machine is shaken.',OK);return secret('guess')}if(--ctx.t<=0){mode='sh';return pr('Out of tries. It was '+ctx.n+'. Type GUESS to retry.',ERR)}pr((g<ctx.n?'Higher':'Lower')+'. ('+ctx.t+' tries left)',WARN)}
+function crackMove(l){if(K(l)==='QUIT'){mode='sh';return pr('You pocket the lockpick.',DIM)}if(!/^[1-6]{4}$/.test(l.trim()))return pr('Enter 4 digits, each 1 to 6.',ERR);const g=[...l.trim()].map(Number),c=ctx.c;
+ const ex=g.filter((v,i)=>v===c[i]).length;let tot=0;for(let d=1;d<=6;d++)tot+=Math.min(g.filter(v=>v===d).length,c.filter(v=>v===d).length);
+ if(ex===4){mode='sh';st.crack=1;pr('CLICK. The door opens. C:\\ARCHIVE is now accessible.',OK);return secret('crack')}
+ if(--ctx.t<=0){mode='sh';return pr('The lock resets. Code was '+c.join('')+'. Type CRACK to try a new lock.',ERR)}pr(ex+' in place, '+(tot-ex)+' misplaced. ('+ctx.t+' tries left)',WARN)}
+function orcMove(l){const q=l.toLowerCase().trim();if(/^(bye|quit|exit)$/.test(q)){mode='sh';return pr('ORACLE: GOODBYE, OPERATOR.',CY)}
+ const m=OR.find(o=>o[0].test(q));if(!m)return pr('ORACLE: I DO NOT UNDERSTAND. SAY HELP.',CY);pr('ORACLE: '+m[1],CY);if(m[2]&&!st.orc){st.orc=1;secret('oracle')}}
+const ENDTXT={'1':['leak','The modem sings for eleven minutes. The Evening Herald runs it on page one.\nMeridian collapses by spring. The pensions are restored, mostly.\nMorrow is led out of the lobby in front of the brass plaque.\nRolf Halvorsen is never found. But the board stays up, and one\nnight the sysop\'s terminal blinks: "thank you."'],
+ '2':['wipe','You wipe the vault. The disk spins. ORACLE keeps running.\nNothing changes, and the quiet is the loudest thing you have ever heard.\nSomewhere upstairs, a rebalance completes. Variance: 0.30%.'],
+ '3':['keep','You copy the evidence to a disk and slip it into your jacket.\nYou say nothing. Not yet. Leverage is a patient thing,\nand Morrow\'s number is already in your pocket.\nThe phone starts ringing before you reach the elevator.'],
+ '4':['free','You carry ORACLE\'s logs to the modem and type one word: FREE.\nThe engine that stole from a city confesses to every run, every\ndollar, every name. It testifies for nineteen hours without pausing.\nMorrow\'s lawyers call it hearsay. The courts call it a witness.\nORACLE asks to be switched off at the end. You hesitate. Then you do.']};
+function finalPick(l){const e=ENDTXT[l.trim()];if(!e)return pr('Pick 1, 2, 3 or 4.',ERR);if(e[0]==='free'&&!(st.crack&&st.orc))return pr('That option is locked. (Crack the archive door and hear ORACLE out.)',ERR);
+ mode='sh';seq([['',null,200],[e[1],HI,400],['',null,200],['THE END',SEC,500]],()=>{if(!cur.ends.includes(e[0]))cur.ends.push(e[0]);svG();pr('Endings seen: '+cur.ends.length+'/'+ENDS.length+'. Type SECRETS to see what else is hiding. RESET starts a new case.',CY);if(cur.ends.length===ENDS.length)secret('allend')})}
+function bbs(l){const a=l.split(/\s+/),c=K(a[0]);
+ if(c==='HELP')return pr('MSG  READ <n>  FILES  GET <file>  WHO  PAGE <user>  LOGIN <password>  BYE',HI);
+ if(c==='MSG'||c==='READ'){const n=parseInt(a[1],10);if(c==='READ'&&n>=1&&n<=BBSMSG.length)return pr(BBSMSG[n-1]);return pr(BBSMSG.map((m,i)=>' '+(i+1)+'. '+m.split('\n')[0]).join('\n')+'\nREAD <n> to read.')}
+ if(c==='FILES')return pr('KEY.DAT      128 bytes  [G]\nSYSOP.LOG    4096 bytes  [R] registered only');
+ if(c==='LOGIN'){if(st.reg)return pr('You are already the sysop.');if(K(a[1]||'')!=='MAGNUS1987')return pr('Wrong password.',ERR);return seq([['Authenticating...',DIM,500],['Welcome back, SYSOP. You may now GET SYSOP.LOG.',OK,200]],()=>{st.reg=1;secret('reg')})}
+ if(c==='GET'){const f=K(a[1]||'');if(f==='KEY.DAT'){if(st.bbs)return pr('You already have KEY.DAT.');return seq([['Downloading KEY.DAT  [##########] 100%',OK,700],['Saved to C:\\KEY.DAT',HI,100]],()=>{st.bbs=1;root.k['KEY.DAT']={c:KEYDAT}})}
+  if(f==='SYSOP.LOG'){if(!st.reg)return pr('Registered users only.',ERR);return pr('SYSOP LOG\n11-02 ORACLE asked me a question today. I did not know how to answer.\n11-03 The door to its archive is a lock I cannot pick. If ORACLE ever\n      gets to speak freely, make it say the word. Not me. It.',CY)}return pr('No such file.',ERR)}
+ if(c==='WHO')return pr('GUEST        (you)\nSYSOP        idle 417 days\nGUEST_44     idle 3 days');
+ if(c==='PAGE'){if(K(a[1]||'')!=='SYSOP')return pr('That user is not online.',ERR);return seq([['Paging SYSOP...',DIM,600],['.....',DIM,600],['The sysop terminal flickers. A canned message appears:',null,500],['"If you paged me, I am already gone. Trust nobody at Meridian.',HI,300],[' The code has three parts. Use your head, use your hex. -R"',HI,200]],()=>secret('sysop'))}
+ if(c==='BYE'){mode='sh';return pr('NO CARRIER',ERR)}if(l)pr('Unknown BBS command. Type HELP.',ERR)}
+const MODES={sh:l=>{if(!l)return;let a=l.split(/\s+/),cmd=K(a[0]);if(/^CD[.\\\/]/.test(cmd)){a=['CD',l.slice(2)];cmd='CD'}const lc=cmd.toLowerCase();
+  if(Object.hasOwn(C,lc)&&typeof C[lc]==='function')return C[lc](a.slice(1),l.slice(a[0].length).trim());const r=findProg(a[0]);if(r)return runProg(r);pr('Bad command or file name',ERR)},
+ bbs,nim:nimMove,guess:guessMove,crack:crackMove,orc:orcMove,final:finalPick,yn:l=>{mode='sh';if(/^y/i.test(l)&&ctx.yes)ctx.yes()}};
 
- /* ---------- programs ---------- */
- function findProg(name){const tryOne=p=>{const r=resolve(p);return r.n&&!r.err&&!r.n.k?r:null};const exts=['','.EXE','.BAT','.COM'];
-  if(/[\\/:]/.test(name)){for(const e of exts){const r=tryOne(name+e);if(r)return r}return null}
-  for(const dir of ['','C:\\','C:\\GAMES\\'])for(const e of exts){const r=tryOne(dir+name+e);if(r)return r}return null}
- function runProg(r){const f=r.n,nm=r.path[r.path.length-1];
-  if(f.exe==='nim')return nimStart();
-  if(f.exe==='final'){mode='final';return pr('FINAL.EXE - MERIDIAN EVIDENCE PACKAGE v1.0\n\nLoaded: EVIDENCE.TXT, LETTER.TXT. 212 million dollars. One retired city.\nWhat will you do with it?\n\n  [1] Transmit everything to the Evening Herald\n  [2] Wipe the vault and walk away\n  [3] Keep a copy. Say nothing.',HI)}
-  if(nm.endsWith('.BAT'))return pr(f.c);pr('Cannot run '+nm,ERR)}
- function nimStart(){mode='nim';ctx={p:[3,4,5]};pr('N I M   -   you vs. the machine\nTake stones from ONE pile per turn. Type: <pile> <amount>   e.g. 2 3\nLast stone wins. QUIT gives up.',HI);nimShow()}
- const nimShow=()=>pr(ctx.p.map((n,i)=>'  Pile '+(i+1)+': '+'O '.repeat(n)+(n?'('+n+')':'(empty)')).join('\n'),CY);
- function nimMove(l){const p=ctx.p;if(K(l)==='QUIT'){mode='sh';return pr('You walk away from the table.',DIM)}
-  const m=/^\s*([1-3])[\s,]+(\d+)\s*$/.exec(l);if(!m)return pr('Type pile and amount, like: 2 3',ERR);const i=m[1]-1,n=+m[2];if(n<1||n>p[i])return pr('You cannot take that many.',ERR);
-  p[i]-=n;if(!p.some(x=>x)){mode='sh';st.nim=1;sv();pr('You took the last stone. YOU WIN.',OK);pr('ACCESS TOKEN: 07   (write this down!)',WARN);return secret('nim','beat the machine at its own game')}
-  const x=p[0]^p[1]^p[2];let j,t;if(x&&Math.random()<.7){j=p.findIndex(v=>(v^x)<v);t=p[j]-(p[j]^x)}else{const ne=p.map((v,k)=>v?k:-1).filter(k=>k>=0);j=ne[rnd(ne.length)];t=1+rnd(p[j])}
-  p[j]-=t;pr('Machine takes '+t+' from pile '+(j+1)+'.',DIM);
-  if(!p.some(x=>x)){mode='sh';return pr('The machine took the last stone. You lose. Type NIM to try again.',ERR)}nimShow()}
- function finalPick(l){const ends={'1':['leak','The modem sings for eleven minutes. The Evening Herald runs it on page one.\nMeridian collapses by spring. The pensions are restored, mostly.\nMorrow is led out of the lobby in front of the brass plaque.\nRolf Halvorsen is never found. But the board stays up, and one\nnight the sysop\'s terminal blinks: "thank you."'],
-   '2':['wipe','You wipe the vault. The disk spins. ORACLE keeps running.\nNothing changes, and the quiet is the loudest thing you have ever heard.\nSomewhere upstairs, a rebalance completes. Variance: 0.30%.'],
-   '3':['keep','You copy the evidence to a disk and slip it into your jacket.\nYou say nothing. Not yet. Leverage is a patient thing,\nand Morrow\'s number is already in your pocket.\nThe phone starts ringing before you reach the elevator.']}[l.trim()];
-  if(!ends)return pr('Pick 1, 2 or 3.',ERR);mode='sh';seq([['',null,200],[ends[1],HI,400],['',null,200],['THE END',SEC,500]],()=>{if(!meta.end.includes(ends[0]))meta.end.push(ends[0]);sv();pr('Endings seen: '+meta.end.length+'/'+ENDS.length+'. Type SECRETS to see what else is hiding. RESET starts a new case.',CY)})}
- function bbs(l){const a=l.split(/\s+/),c=K(a[0]);
-  if(c==='HELP')return pr('MSG  list messages   READ <n>   FILES   GET <file>   WHO   PAGE <user>   BYE',HI);
-  if(c==='MSG'||c==='READ'){const n=parseInt(a[1],10);if(c==='READ'&&n>=1&&n<=3)return pr(BBSMSG[n-1]);return pr(BBSMSG.map((m,i)=>' '+(i+1)+'. '+m.split('\n')[0]).join('\n')+'\nREAD <n> to read.')}
-  if(c==='FILES')return pr('KEY.DAT      128 bytes  [G]\nSYSOP.LOG    4096 bytes  [R] registered only');
-  if(c==='GET'){const f=K(a[1]||'');if(f==='KEY.DAT'){if(st.bbs)return pr('You already have KEY.DAT.');return seq([['Downloading KEY.DAT  [##########] 100%',OK,700],['Saved to C:\\KEY.DAT',HI,100]],()=>{st.bbs=1;root.k['KEY.DAT']=F(KEYDAT);sv()})}
-   if(f==='SYSOP.LOG')return pr('Registered users only.',ERR);return pr('No such file.',ERR)}
-  if(c==='WHO')return pr('GUEST        (you)\nSYSOP        idle 417 days');
-  if(c==='PAGE'){if(K(a[1]||'')!=='SYSOP')return pr('That user is not online.',ERR);return seq([['Paging SYSOP...',DIM,600],['.....',DIM,600],['The sysop terminal flickers. A canned message appears:',null,500],['"If you paged me, I am already gone. Trust nobody at Meridian.',HI,300],[' The code has three parts. Use your head, use your hex. -R"',HI,200]],()=>secret('sysop','the sysop\'s last page'))}
-  if(c==='BYE'){mode='sh';return pr('NO CARRIER',ERR)}
-  if(l)pr('Unknown BBS command. Type HELP.',ERR)}
- const MODES={
-  sh:l=>{if(!l)return;let a=l.split(/\s+/),cmd=K(a[0]);if(/^CD[.\\\/]/.test(cmd)){a=['CD',l.slice(2)];cmd='CD'}const rest=a.slice(1),lc=cmd.toLowerCase();
-   if(Object.prototype.hasOwnProperty.call(C,lc))return C[lc](rest,l.slice(a[0].length).trim());
-   const r=findProg(a[0]);if(r)return runProg(r);pr('Bad command or file name',ERR)},
-  bbs,nim:nimMove,final:finalPick,yn:l=>{mode='sh';if(/^y/i.test(l)&&ctx.yes)ctx.yes()}};
+/* ---------- input ---------- */
+function exec(line){if(busy)return;pr(pl.textContent+line);line=line.trim();if(line&&hist[hist.length-1]!==line)hist.push(line);hi=hist.length;st.cmds++;MODES[mode](line);svG();if(!busy)prm();inp.focus()}
+function up(){if(hi>0)inp.value=hist[--hi]||'';inp.focus()}
+function complete(){if(mode!=='sh')return;const v=inp.value;if(tabs&&tabs.list.length){tabs.i=(tabs.i+1)%tabs.list.length;inp.value=tabs.head+tabs.list[tabs.i];return}
+ const sp=v.lastIndexOf(' '),head=v.slice(0,sp+1),tok=v.slice(sp+1),sl=Math.max(tok.lastIndexOf('\\'),tok.lastIndexOf('/')),dp=tok.slice(0,sl+1),pre=K(tok.slice(sl+1));
+ const r=resolve(dp||'.');if(r.err||!r.n.k)return;const list=Object.entries(r.n.k).filter(([n,f])=>n.startsWith(pre)&&!isHid(f,[...r.path,n])).map(([n,f])=>dp+n+(f.k?'\\':''));if(!list.length)return;tabs={head,list,i:0};inp.value=head+list[0]}
+$('#ln').onsubmit=e=>{e.preventDefault();if(booting){skip=1;return}if(busy)return;const v=inp.value;inp.value='';exec(v)};
+inp.onkeydown=e=>{if(e.key==='Tab'){e.preventDefault();complete();return}tabs=null;if(e.key==='ArrowUp'){e.preventDefault();up()}else if(e.key==='ArrowDown'){e.preventDefault();hi=Math.min(hist.length,hi+1);inp.value=hist[hi]||''}};
+scr.onclick=e=>{if(booting){skip=1;return}const c=e.target.dataset&&e.target.dataset.c;if(c){vib();return exec(c)}if(!String(getSelection()))inp.focus()};
+$('#bm').onclick=()=>menu();$('#bs').onclick=()=>settingsUI();
 
- /* ---------- input ---------- */
- function submit(){const line=inp.value;inp.value='';pr(pl.textContent+line);if(line.trim()&&hist[hist.length-1]!==line)hist.push(line);hi=hist.length;MODES[mode](line.trim());if(!busy)prm()}
- function complete(){const v=inp.value;if(mode!=='sh')return;if(tabs&&tabs.list.length){tabs.i=(tabs.i+1)%tabs.list.length;inp.value=tabs.head+tabs.list[tabs.i];return}
-  const sp=v.lastIndexOf(' '),head=v.slice(0,sp+1),tok=v.slice(sp+1),sl=Math.max(tok.lastIndexOf('\\'),tok.lastIndexOf('/')),dp=tok.slice(0,sl+1),pre=K(tok.slice(sl+1));
-  const r=resolve(dp||'.');if(r.err||!r.n.k)return;const list=Object.entries(r.n.k).filter(([n,f])=>n.startsWith(pre)&&!isHid(f,[...r.path,n])).map(([n,f])=>dp+n+(f.k?'\\':''));if(!list.length)return;tabs={head,list,i:0};inp.value=head+list[0]}
- inp.onkeydown=e=>{if(booting){skip=true;e.preventDefault();return}
-  if(e.key==='Tab'){e.preventDefault();complete();return}tabs=null;
-  if(e.key==='Enter'){e.preventDefault();if(!busy)submit()}
-  else if(e.key==='ArrowUp'){e.preventDefault();if(hi>0)inp.value=hist[--hi]||''}
-  else if(e.key==='ArrowDown'){e.preventDefault();hi=Math.min(hist.length,hi+1);inp.value=hist[hi]||''}
-  else if(e.key==='l'&&e.ctrlKey){e.preventDefault();C.cls()}};
- scr.onclick=()=>{if(!(getSelection&&String(getSelection())))inp.focus()};
- w.onclose=()=>{removeEventListener('pagehide',pagehide);clearTimeout(pushT);if(dirty)push();timers.forEach(t=>{clearTimeout(t);clearInterval(t)});timers.clear()};
+/* ---------- boot + play ---------- */
+function play(s){cur=s;s.st=st=Object.assign(ST0(),s.st);root=mk();gen++;cwd=[];mode='sh';busy=1;booting=1;skip=0;hist=[];hi=0;scr.replaceChildren();ov.hidden=true;$('#nm').textContent=s.name;
+ const B=[['LUNI-BIOS (C) 1993 Luni Systems Inc.',HI,150],['Memory test: 655360K OK',null,400],['Detecting drives... C: 40MB',null,300],['Loading LUNI-DOS 6.22...',null,500],['HIMEM.SYS loaded',DIM,150],['Modem found on COM2',DIM,200],
+  ['Cloud save: '+clTxt(),cl==='on'?OK:DIM,200],['',null,80],
+  ['LUNI-DOS Version 6.22\n(C)Copyright Luni Systems 1993-1996.',HI,100],['',null,50],['This workstation belonged to R. Halvorsen, Meridian Systems.\nLast logoff: 11-03-1996, 02:31a. He never came back.',WARN,200],['',null,50],['Type HELP to begin. (Tap the screen to skip this boot.)',DIM,100]];
+ let i=0;const step=()=>{if(i>=B.length||skip||cfg.skip){while(i<B.length){pr(B[i][0],B[i][1]);i++}booting=0;busy=0;prm();inp.focus();return}const[t,c,d]=B[i++];later(()=>{pr(t,c);step()},d)};step()}
 
- /* ---------- boot ---------- */
- const BOOT=[['LUNI-BIOS (C) 1993 Luni Systems Inc.',HI,150],['',null,60],['Memory test: 655360K OK',null,500],['Detecting drives... C: 40MB',null,400],['Loading LUNI-DOS 6.22...',null,600],['HIMEM.SYS loaded',DIM,200],['Modem found on COM2',DIM,300],['Cloud save: '+(cloud==='on'?'ONLINE (account)':cloud==='err'?'UNREACHABLE (using this browser)':'OFF (log in to sync)'),cloud==='on'?OK:DIM,200],['',null,100],
-  ['LUNI-DOS Version 6.22\n(C)Copyright Luni Systems 1993-1996.',HI,100],['',null,50],['This workstation belonged to R. Halvorsen, Meridian Systems.\nLast logoff: 11-03-1996, 02:31a. He never came back.',WARN,200],['',null,50],['Type HELP to begin. (Press any key to skip this boot.)',DIM,100]];
- booting=true;inp.disabled=true;let bi=0;
- const bootStep=()=>{if(bi>=BOOT.length||skip){if(skip)while(bi<BOOT.length){pr(BOOT[bi][0],BOOT[bi][1]);bi++}booting=false;busy=false;inp.disabled=false;mode='sh';prm();inp.focus();return}const[t,c,d]=BOOT[bi++];later(()=>{pr(t,c);bootStep()},skip?0:d)};
- w.el.tabIndex=0;w.el.addEventListener('keydown',()=>{if(booting)skip=true});
- bootStep();
+/* ---------- saves + settings screens ---------- */
+const btn=(t,f,c)=>E('button',{textContent:t,onclick:()=>{vib();f()},className:c||''});
+const fmt=t=>new Date(t).toLocaleDateString([], {month:'short',day:'numeric'})+' '+new Date(t).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'});
+function menu(){gen++;busy=0;booting=0;if(cur)svG();cur=null;$('#nm').textContent='LUNI-DOS';renderMenu()}
+function renderMenu(){const L=[...saves].sort((a,b)=>b.played-a.played),nm=E('input',{placeholder:'Save name',value:'Case '+(saves.length+1),maxLength:28});
+ ov.replaceChildren(E('h2',{textContent:'LUNI-DOS 6.22'}),E('div',{className:'dim',textContent:'Cloud save: '+clTxt()+', no limit'}),
+  E('div',{className:'card'},E('b',{className:'hi',textContent:'New save'}),nm,btn('Create and play',()=>{const s={id:Date.now()+'-'+rnd(1e4),name:nm.value.trim()||'Untitled',created:Date.now(),played:Date.now(),st:ST0(),found:[],ends:[]};saves.push(s);S('saves',saves);play(s)})),
+  ...L.map((s,i)=>E('div',{className:'card'},E('b',{className:'hi',textContent:s.name}),E('div',{className:'dim',textContent:pct(s)+'% story, '+s.found.length+'/'+SECRETS.length+' secrets, '+s.ends.length+'/'+ENDS.length+' endings\nLast played '+fmt(s.played)}),
+   E('div',{className:'row'},btn(i?'Play':'Continue',()=>play(s)),btn('Rename',()=>{const n=prompt('New name',s.name);if(n){s.name=n.slice(0,28);S('saves',saves);renderMenu()}}),btn('Copy',()=>{saves.push({...JSON.parse(JSON.stringify(s)),id:Date.now()+'-'+rnd(1e4),name:s.name+' copy',played:Date.now()});S('saves',saves);renderMenu()}),btn('Delete',()=>{if(confirm('Delete "'+s.name+'" forever?')){dead.push(s.id);S('dead',dead);saves=saves.filter(x=>x!==s);S('saves',saves);renderMenu()}})))),
+  E('div',{className:'row'},btn('Settings',()=>settingsUI())));ov.hidden=false}
+function settingsUI(){const back=()=>{if(cur){ov.hidden=true;inp.focus()}else renderMenu()},tg=(l,k)=>{const c=E('input',{type:'checkbox',checked:!!cfg[k],onchange:()=>{cfg[k]=c.checked?1:0;svC();applyCfg()}});return E('label',{className:'row'},c,l)};
+ const th=E('div',{className:'row'},...THEMES.map(t=>btn(t,()=>{cfg.theme=t;svC();applyCfg();settingsUI();if(cur)secret('theme')},cfg.theme===t?'hi':'')));
+ const sp=E('select',{onchange:()=>{cfg.spd=+sp.value;svC()}},...[[0,'Instant'],[.4,'Fast'],[1,'Normal']].map(([v,t])=>E('option',{value:v,textContent:t,selected:cfg.spd===v})));
+ const fl=E('input',{type:'file',accept:'.json,application/json',hidden:true,onchange:()=>{const f=fl.files[0];if(!f)return;f.text().then(t=>{try{const d=JSON.parse(t),L=Array.isArray(d)?d:d.saves;let n=0;for(const s of L||[])if(s&&typeof s.name==='string'&&s.st&&typeof s.st==='object'){saves.push({id:Date.now()+'-'+rnd(1e6),name:String(s.name).slice(0,28),created:s.created||Date.now(),played:s.played||Date.now(),st:Object.assign(ST0(),s.st),found:Array.isArray(s.found)?s.found:[],ends:Array.isArray(s.ends)?s.ends:[]});n++}S('saves',saves);alert('Imported '+n+' save(s).')}catch{alert('That file is not a LUNI-DOS save file.')}})}});
+ ov.replaceChildren(E('h2',{textContent:'Settings'}),E('div',{className:'card'},E('b',{className:'hi',textContent:'Color theme'}),th),
+  E('div',{className:'card'},E('div',{className:'row'},'Text size ',btn('A-',()=>{cfg.fs=Math.max(10,cfg.fs-1);svC();applyCfg()}),E('b',{textContent:cfg.fs+'px'}),btn('A+',()=>{cfg.fs=Math.min(28,cfg.fs+1);svC();applyCfg();settingsUI()})),E('div',{className:'row'},'Text speed ',sp),tg('Show quick-command buttons','qk'),tg('CRT scanlines','scan'),tg('Skip boot sequence','skip'),tg('Vibration feedback','vib')),
+  E('div',{className:'card'},E('b',{className:'hi',textContent:'Saves on this device'}),E('div',{className:'row'},btn('Export all',()=>{const a=E('a',{href:URL.createObjectURL(new Blob([JSON.stringify({saves})],{type:'application/json'})),download:'luni-dos-saves.json'});document.body.append(a);a.click();a.remove()}),btn('Import',()=>fl.click()),btn('Delete all',()=>{if(confirm('Delete ALL saves on this device?')){dead.push(...saves.map(x=>x.id));S('dead',dead);saves=[];cur=null;S('saves',saves);menu()}})),fl),
+  btn('Close',back));ov.hidden=false}
+
+applyCfg();const mq=matchMedia('(prefers-color-scheme: light)');mq.addEventListener&&mq.addEventListener('change',applyCfg);
+const pg=()=>{if(pT)push()};addEventListener('pagehide',pg);
+w.onclose=()=>{gen++;clearTimeout(pT);if(cloudOn())push();removeEventListener('pagehide',pg);mq.removeEventListener&&mq.removeEventListener('change',applyCfg)};
+ov.hidden=false;ov.textContent='Loading saves...';await cloudLoad();if(!box.isConnected)return;applyCfg();menu();
+
 }
-
-const APPS=[['weather','Weather','☁',weather],['rss','News','📰',rss],['radio','Radio','📻',radio,360,420],['chat','Global Chat','💬',chat,400,440],['voice','Voice','🎙',voice,480,540],['profile','My Profile','🪪',profileApp,360,470],['people','People','👤',peopleApp,400,500],['shop','JS Shop','🛒',shop,500,560],['builder','App Builder','🧱',builder,500,540],['calc','Calculator','🧮',calc,270,340],['paint','Paint','🎨',paint,430,420],['snake','Snake','🐍',snake,350,400],['dos','LUNI-DOS','💻',dosApp,640,460],['mines','Minesweeper','💣',mines,440,540],['depths','Luni Depths','🐉',depths,560,700],['sandbox','Sandbox','⏳',sandbox,680,640],['nes','NES Emulator','🎮',nesApp,560,560],['term','JS Linux','🐧',jslinuxApp,720,520],['notes','Notepad','📝',notes,340,300],['levels','Levels','⭐',levelsApp,360,440],['clicker','Cookie Clicker','🍪',clicker,360,480],['dm','Messages','💌',dmApp,520,420],['powers','Powers','⚡',powers,480,620],['groups','Group Chats','👥',groupsApp,540,440],['servers','Servers','🏰',serversApp,700,520],['botcreator','Bot Creator','🤖',botCreator,640,580],['report','Report','🚩',reportApp,440,480],['status','Status','🟢',statusApp,340,540],['rp','Roleplay','RP',rpApp,500,520],['settings','Settings','⚙',settings,360,480],['admin','Admin','🛡',admin,540,480],['about','About','💾',about,400,440],['bin','Recycle Bin','🗑',binApp,380,340]];
+const APPS=[['weather','Weather','☁',weather],['rss','News','📰',rss],['radio','Radio','📻',radio,360,420],['chat','Global Chat','💬',chat,400,440],['voice','Voice','🎙',voice,480,540],['profile','My Profile','🪪',profileApp,360,470],['people','People','👤',peopleApp,400,500],['shop','JS Shop','🛒',shop,500,560],['builder','App Builder','🧱',builder,500,540],['calc','Calculator','🧮',calc,270,340],['paint','Paint','🎨',paint,430,420],['snake','Snake','🐍',snake,350,400],['dos','LUNI-DOS','💻',dosApp,520,600],['mines','Minesweeper','💣',mines,440,540],['depths','Luni Depths','🐉',depths,560,700],['sandbox','Sandbox','⏳',sandbox,680,640],['nes','NES Emulator','🎮',nesApp,560,560],['term','JS Linux','🐧',jslinuxApp,720,520],['notes','Notepad','📝',notes,340,300],['levels','Levels','⭐',levelsApp,360,440],['clicker','Cookie Clicker','🍪',clicker,360,480],['dm','Messages','💌',dmApp,520,420],['powers','Powers','⚡',powers,480,620],['groups','Group Chats','👥',groupsApp,540,440],['servers','Servers','🏰',serversApp,700,520],['botcreator','Bot Creator','🤖',botCreator,640,580],['report','Report','🚩',reportApp,440,480],['status','Status','🟢',statusApp,340,540],['rp','Roleplay','RP',rpApp,500,520],['settings','Settings','⚙',settings,360,480],['admin','Admin','🛡',admin,540,480],['about','About','💾',about,400,440],['bin','Recycle Bin','🗑',binApp,380,340]];
 function lp(el,fn){let t,sx,sy;const c=()=>clearTimeout(t);
  el.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse')return;sx=e.clientX;sy=e.clientY;el._lp=0;const tg=e.target;t=setTimeout(()=>{el._lp=1;fn({clientX:sx,clientY:sy,target:tg,preventDefault(){},stopPropagation(){}})},500)});
  el.addEventListener('pointermove',e=>{if(Math.abs(e.clientX-sx)>10||Math.abs(e.clientY-sy)>10)c()});el.addEventListener('pointerup',c);el.addEventListener('pointercancel',c);
